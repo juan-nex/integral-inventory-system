@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Search, Boxes, TrendingUp, AlertTriangle, PackageX } from 'lucide-react'
 import { Card, Badge, PageHeader } from '@/components/kit'
-import { products, categories, stockStatus, currency } from '@/lib/mock-data'
+import { products as initialProducts, categories, stockStatus, currency, type Product } from '@/lib/mock-data'
 
 const filters = [
   { key: 'all', label: 'Todos' },
@@ -13,8 +13,25 @@ const filters = [
 ] as const
 
 export default function InventarioPage() {
+  const [products, setProducts] = useState<Product[]>(initialProducts)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | 'ok' | 'low' | 'out'>('all')
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/products')
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json() as Promise<Product[]>
+      })
+      .then((databaseProducts) => {
+        if (active) setProducts(databaseProducts)
+      })
+      .catch((error: unknown) => console.error('No se pudo cargar el inventario de SQLite:', error))
+    return () => {
+      active = false
+    }
+  }, [])
 
   const stats = useMemo(() => {
     const totalValue = products.reduce((s, p) => s + p.stock * p.cost, 0)
@@ -22,7 +39,7 @@ export default function InventarioPage() {
     const out = products.filter((p) => stockStatus(p) === 'out').length
     const units = products.reduce((s, p) => s + p.stock, 0)
     return { totalValue, low, out, units }
-  }, [])
+  }, [products])
 
   const rows = useMemo(() => {
     return products.filter((p) => {
@@ -33,7 +50,7 @@ export default function InventarioPage() {
         p.category.toLowerCase().includes(query.toLowerCase())
       return matchF && matchQ
     })
-  }, [query, filter])
+  }, [products, query, filter])
 
   const cards = [
     { label: 'Valor del inventario', value: currency(stats.totalValue), icon: TrendingUp, tone: 'accent' as const },

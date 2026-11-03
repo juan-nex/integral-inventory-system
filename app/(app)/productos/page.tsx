@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Search, Package, Barcode, Truck, LayoutGrid, List } from 'lucide-react'
 import { Card, Badge, PageHeader, Modal, Field, inputClass } from '@/components/kit'
 import {
@@ -25,6 +25,26 @@ export default function ProductosPage() {
   const [view, setView] = useState<'grid' | 'table'>('grid')
   const [open, setOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/products')
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json() as Promise<Product[]>
+      })
+      .then((databaseProducts) => {
+        if (active) setItems(databaseProducts)
+      })
+      .catch((error: unknown) => {
+        console.error('No se pudo cargar el catálogo de SQLite:', error)
+        if (active) setLoadError('No se pudo cargar el catálogo desde la base de datos.')
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const filtered = useMemo(() => {
     return items.filter((p) => {
@@ -37,11 +57,10 @@ export default function ProductosPage() {
     })
   }, [items, query, cat])
 
-  const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
-    const newProduct: Product = {
-      id: `P-${1000 + items.length + 1}`,
+    const newProduct = {
       name: String(fd.get('name') || 'Nuevo producto'),
       sku: String(fd.get('sku') || 'SKU-NUEVO'),
       barcode: String(fd.get('barcode') || '0000000000000'),
@@ -53,10 +72,22 @@ export default function ProductosPage() {
       minStock: Number(fd.get('minStock') || 0),
       unit: 'und',
     }
-    setItems((prev) => [newProduct, ...prev])
-    setOpen(false)
-    setToast(`Producto "${newProduct.name}" registrado correctamente`)
-    setTimeout(() => setToast(null), 3000)
+    try {
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newProduct),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
+      setItems((prev) => [result as Product, ...prev])
+      setOpen(false)
+      setToast(`Producto "${newProduct.name}" registrado correctamente`)
+      setTimeout(() => setToast(null), 3000)
+    } catch (error) {
+      console.error('No se pudo registrar el producto:', error)
+      setLoadError(error instanceof Error ? error.message : 'No se pudo guardar el producto.')
+    }
   }
 
   return (
@@ -74,6 +105,12 @@ export default function ProductosPage() {
           </button>
         }
       />
+
+      {loadError && (
+        <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {loadError}
+        </p>
+      )}
 
       <Card className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
         <div className="flex flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3">

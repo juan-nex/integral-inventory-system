@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Search, ReceiptText, ChevronDown, CreditCard, Banknote, ArrowRightLeft } from 'lucide-react'
 import { Card, Badge, PageHeader } from '@/components/kit'
-import { sales, currency } from '@/lib/mock-data'
+import { currency, type Sale } from '@/lib/mock-data'
 
 const methodIcon = {
   Efectivo: Banknote,
@@ -12,8 +12,31 @@ const methodIcon = {
 }
 
 export default function VentasPage() {
+  const [sales, setSales] = useState<Sale[]>([])
   const [query, setQuery] = useState('')
-  const [expanded, setExpanded] = useState<string | null>(sales[0]?.id ?? null)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/sales')
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json() as Promise<Sale[]>
+      })
+      .then((databaseSales) => {
+        if (!active) return
+        setSales(databaseSales)
+        setExpanded(databaseSales[0]?.id ?? null)
+      })
+      .catch((cause: unknown) => {
+        console.error('No se pudieron cargar las ventas de SQLite:', cause)
+        if (active) setError('No se pudieron cargar las ventas desde la base de datos.')
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const filtered = useMemo(
     () =>
@@ -36,6 +59,7 @@ export default function VentasPage() {
         subtitle="Historial de transacciones registradas"
       />
 
+      {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="p-5">
           <p className="text-sm text-muted-foreground">Ventas de hoy</p>
@@ -66,6 +90,9 @@ export default function VentasPage() {
       </Card>
 
       <Card className="divide-y divide-border overflow-hidden">
+        {sales.length === 0 && !error && (
+          <p className="p-6 text-center text-sm text-muted-foreground">No hay ventas registradas.</p>
+        )}
         {filtered.map((s) => {
           const open = expanded === s.id
           const Icon = methodIcon[s.method]

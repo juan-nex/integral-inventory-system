@@ -9,22 +9,33 @@ export default function LoginPage() {
   const router = useRouter()
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [email, setEmail] = useState('admin@sena.edu.co')
   const [password, setPassword] = useState('senasoft')
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-
-    let role = 'admin'
-    if (email.includes('vendedor') || email.includes('trabajador')) role = 'vendedor'
-    if (email.includes('inventarista')) role = 'inventarista'
-
-    setTimeout(() => {
-      document.cookie = `auth-token=${role}; path=/; max-age=86400` // 1 day
-      router.push('/')
+    setError('')
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setError(result.error || 'No se pudo iniciar sesión.')
+        return
+      }
+      router.replace('/')
       router.refresh()
-    }, 900)
+    } catch (cause) {
+      console.error('Error al iniciar sesión:', cause)
+      setError('No se pudo conectar con el servidor. Inténtalo de nuevo.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -100,6 +111,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </Field>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
             <div className="flex items-center justify-between text-sm">
               <label className="flex items-center gap-2 text-muted-foreground">

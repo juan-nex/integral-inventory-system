@@ -9,6 +9,9 @@
 
 # production
 /build
+/data/*.sqlite
+/data/*.sqlite-shm
+/data/*.sqlite-wal
 
 # debug
 npm-debug.log*

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "db:init": "node scripts/init-db.cjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Search,
   Plus,
@@ -15,7 +15,7 @@ import {
   ScanBarcode,
 } from 'lucide-react'
 import { Card, Badge, Modal } from '@/components/kit'
-import { products, categories, stockStatus, currency, type Product } from '@/lib/mock-data'
+import { categories, stockStatus, currency, type Product } from '@/lib/mock-data'
 
 type CartLine = { product: Product; qty: number }
 
@@ -26,11 +26,33 @@ const methods = [
 ] as const
 
 export default function PosPage() {
+  const [products, setProducts] = useState<Product[]>([])
   const [query, setQuery] = useState('')
   const [cat, setCat] = useState('Todas')
   const [cart, setCart] = useState<CartLine[]>([])
   const [method, setMethod] = useState<(typeof methods)[number]['key']>('Efectivo')
   const [done, setDone] = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/products')
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json() as Promise<Product[]>
+      })
+      .then((databaseProducts) => {
+        if (active) setProducts(databaseProducts)
+      })
+      .catch((cause: unknown) => {
+        console.error('No se pudieron cargar los productos del POS:', cause)
+        if (active) setError('No se pudieron cargar los productos desde SQLite.')
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const filtered = useMemo(
     () =>
@@ -40,15 +62,21 @@ export default function PosPage() {
         const mc = cat === 'Todas' || p.category === cat
         return mq && mc && stockStatus(p) !== 'out'
       }),
-    [query, cat],
+    [products, query, cat],
   )
 
-  const add = (p: Product) =>
+  const add = (p: Product) => {
+    const found = cart.find((line) => line.product.id === p.id)
+    if ((found?.qty ?? 0) >= p.stock) {
+      setError(`No hay más unidades disponibles de ${p.name}.`)
+      return
+    }
+    setError('')
     setCart((prev) => {
-      const found = prev.find((l) => l.product.id === p.id)
       if (found) return prev.map((l) => (l.product.id === p.id ? { ...l, qty: l.qty + 1 } : l))
       return [...prev, { product: p, qty: 1 }]
     })
+  }
 
   const setQty = (id: string, delta: number) =>
     setCart((prev) =>
@@ -63,12 +91,39 @@ export default function PosPage() {
   const tax = Math.round(subtotal * 0.08)
   const total = subtotal + tax
 
-  const checkout = () => {
-    setDone(true)
+  const checkout = async () => {
+    setProcessing(true)
+    setError('')
+    try {
+      const response = await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method,
+          customer: 'Cliente general',
+          items: cart.map(({ product, qty }) => ({ productId: product.id, qty })),
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
+      setDone(true)
+      fetch('/api/products')
+        .then(async (productsResponse) => {
+          if (!productsResponse.ok) throw new Error(`HTTP ${productsResponse.status}`)
+          setProducts(await productsResponse.json() as Product[])
+        })
+        .catch((cause: unknown) => console.error('La venta se guardó, pero no se actualizó la lista de productos:', cause))
+    } catch (cause) {
+      console.error('No se pudo registrar la venta:', cause)
+      setError(cause instanceof Error ? cause.message : 'No se pudo registrar la venta.')
+    } finally {
+      setProcessing(false)
+    }
   }
 
   const reset = () => {
     setDone(false)
+    setError('')
     setCart([])
     setMethod('Efectivo')
   }
@@ -77,6 +132,7 @@ export default function PosPage() {
     <div className="grid h-[calc(100vh-8rem)] gap-6 lg:grid-cols-[1fr_380px] animate-fade-up">
       {/* Products */}
       <div className="flex min-h-0 flex-col gap-4">
+      {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
             <div className="flex flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3">
@@ -167,7 +223,11 @@ export default function PosPage() {
                       <Minus className="size-3.5" />
                     </button>
                     <span className="w-6 text-center text-sm font-medium tabular-nums">{l.qty}</span>
-                    <button onClick={() => setQty(l.product.id, 1)} className="rounded-md border border-border p-1 hover:bg-muted">
+                    <button
+                      onClick={() => setQty(l.product.id, 1)}
+                      disabled={l.qty >= l.product.stock}
+                      className="rounded-md border border-border p-1 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                    >
                       <Plus className="size-3.5" />
                     </button>
                   </div>
@@ -213,11 +273,11 @@ export default function PosPage() {
             </div>
           </div>
           <button
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || processing}
             onClick={checkout}
             className="w-full rounded-xl bg-accent py-3 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Cobrar {currency(total)}
+            {processing ? 'Guardando venta…' : `Cobrar ${currency(total)}`}
           </button>
         </div>
       </Card>
