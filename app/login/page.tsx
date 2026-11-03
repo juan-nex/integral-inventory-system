@@ -1,12 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Boxes, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { Field, inputClass } from '@/components/kit'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -28,8 +26,7 @@ export default function LoginPage() {
         setError(result.error || 'No se pudo iniciar sesión.')
         return
       }
-      router.replace('/')
-      router.refresh()
+      window.location.replace('/')
     } catch (cause) {
       console.error('Error al iniciar sesión:', cause)
       setError('No se pudo conectar con el servidor. Inténtalo de nuevo.')
