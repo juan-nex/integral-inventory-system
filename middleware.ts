@@ -1,42 +1,36 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Middleware para proteger las rutas de la aplicación
 export function middleware(request: NextRequest) {
-  const authToken = request.cookies.get('auth-token')?.value
-  const isLoginPage = request.nextUrl.pathname === '/login'
+  const role = request.cookies.get('auth-token')?.value
+  const path = request.nextUrl.pathname
 
-  // Si no está autenticado y no está en la página de login, redirigir al login
-  if (!authToken && !isLoginPage) {
+  if (!role) {
+    if (path === '/login') return NextResponse.next()
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Si ya está autenticado y trata de entrar al login, redirigir al dashboard
-  if (authToken && isLoginPage) {
-    return NextResponse.redirect(new URL('/', request.url))
+  if (role !== 'admin' && role !== 'vendedor') {
+    const response = NextResponse.redirect(new URL('/login', request.url))
+    for (const cookie of ['auth-token', 'auth-user', 'auth-name']) {
+      response.cookies.delete(cookie)
+    }
+    return response
   }
 
-  if (authToken && !isLoginPage) {
-    const role = authToken
-    const path = request.nextUrl.pathname
+  if (path === '/login') return NextResponse.next()
 
-    if (role === 'vendedor') {
-      const allowed = ['/', '/pos', '/ventas', '/inventario', '/alertas', '/productos']
-      if (!allowed.includes(path) && path !== '/') {
-        return NextResponse.redirect(new URL('/', request.url))
-      }
-    } else if (role === 'inventarista') {
-      const allowed = ['/', '/inventario', '/alertas', '/productos', '/proveedores']
-      if (!allowed.includes(path) && path !== '/') {
-        return NextResponse.redirect(new URL('/', request.url))
-      }
-    }
+  const workerRoute = path === '/trabajador' || path.startsWith('/trabajador/')
+  if (workerRoute && role !== 'vendedor') {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+  if (!workerRoute && role !== 'admin') {
+    return NextResponse.redirect(new URL('/trabajador', request.url))
   }
 
   return NextResponse.next()
 }
 
-// Configurar en qué rutas se debe ejecutar el middleware
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 }

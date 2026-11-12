@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useSyncExternalStore } from 'react'
 
 type Theme = 'light' | 'dark'
 
@@ -12,28 +12,45 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('light')
+const themeKey = 'stockly-theme'
+const themeEvent = 'stockly-theme-change'
 
-  useEffect(() => {
-    const stored = (typeof window !== 'undefined' &&
-      window.localStorage.getItem('stockly-theme')) as Theme | null
-    const prefersDark =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches
-    const initial = stored ?? (prefersDark ? 'dark' : 'light')
-    setThemeState(initial)
-  }, [])
+function getThemeSnapshot(): Theme {
+  const stored = window.localStorage.getItem(themeKey)
+  if (stored === 'dark' || stored === 'light') return stored
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function getServerThemeSnapshot(): Theme {
+  return 'light'
+}
+
+function subscribeTheme(onChange: () => void) {
+  const media = window.matchMedia('(prefers-color-scheme: dark)')
+  window.addEventListener('storage', onChange)
+  window.addEventListener(themeEvent, onChange)
+  media.addEventListener('change', onChange)
+  return () => {
+    window.removeEventListener('storage', onChange)
+    window.removeEventListener(themeEvent, onChange)
+    media.removeEventListener('change', onChange)
+  }
+}
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot)
 
   useEffect(() => {
     const root = document.documentElement
     root.classList.toggle('dark', theme === 'dark')
     root.classList.toggle('light', theme === 'light')
-    window.localStorage.setItem('stockly-theme', theme)
   }, [theme])
 
-  const setTheme = (t: Theme) => setThemeState(t)
-  const toggleTheme = () => setThemeState((t) => (t === 'dark' ? 'light' : 'dark'))
+  const setTheme = (t: Theme) => {
+    window.localStorage.setItem(themeKey, t)
+    window.dispatchEvent(new Event(themeEvent))
+  }
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark')
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>

@@ -26,7 +26,7 @@ export default function LoginPage() {
         setError(result.error || 'No se pudo iniciar sesión.')
         return
       }
-      window.location.replace('/')
+      window.location.replace(result.user?.role === 'vendedor' ? '/trabajador' : '/')
     } catch (cause) {
       console.error('Error al iniciar sesión:', cause)
       setError('No se pudo conectar con el servidor. Inténtalo de nuevo.')
@@ -130,11 +130,10 @@ export default function LoginPage() {
             </button>
 
             <div className="mt-4 flex flex-col gap-2 text-center text-xs text-muted-foreground">
-              <p>Demo: usa las credenciales precargadas o selecciona un rol:</p>
+              <p>Demo: selecciona un perfil para cargar su correo:</p>
               <div className="flex justify-center gap-2">
                 <button type="button" onClick={() => setEmail('admin@sena.edu.co')} className="rounded border px-2 py-1 hover:bg-muted">Admin</button>
                 <button type="button" onClick={() => setEmail('vendedor@sena.edu.co')} className="rounded border px-2 py-1 hover:bg-muted">Vendedor</button>
-                <button type="button" onClick={() => setEmail('inventarista@sena.edu.co')} className="rounded border px-2 py-1 hover:bg-muted">Inventarista</button>
               </div>
             </div>
           </form>

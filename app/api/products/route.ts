@@ -15,6 +15,7 @@ type ProductRow = {
   stock: number
   minStock: number
   unit: string
+  tax: number
 }
 
 function readProducts(query = '') {
@@ -22,7 +23,7 @@ function readProducts(query = '') {
   const term = `%${query.trim()}%`
   return db.prepare(`
     SELECT p.id, p.name, p.sku, p.barcode, c.name AS category, s.name AS supplier,
-      p.price, p.cost, p.stock, p.min_stock AS minStock, p.unit
+      p.price, p.cost, p.stock, p.min_stock AS minStock, p.unit, p.tax
     FROM products p
     JOIN categories c ON c.id = p.category_id
     JOIN suppliers s ON s.id = p.supplier_id
@@ -39,13 +40,26 @@ export async function GET(request: NextRequest) {
   if (unauthorized(request)) {
     return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
   }
+  const role = request.cookies.get('auth-token')?.value
+  if (role !== 'admin' && role !== 'vendedor') {
+    return NextResponse.json({ error: 'No tienes permiso para consultar productos.' }, { status: 403 })
+  }
   const query = new URL(request.url).searchParams.get('q') || ''
-  return NextResponse.json(readProducts(query))
+  const rows = readProducts(query)
+  if (role === 'vendedor') {
+    return NextResponse.json(rows.map(({ id, name, sku, barcode, category, price, stock, minStock, unit, tax }) => ({
+      id, name, sku, barcode, category, price, stock, minStock, unit, tax,
+    })))
+  }
+  return NextResponse.json(rows)
 }
 
 export async function POST(request: NextRequest) {
   if (unauthorized(request)) {
     return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
+  }
+  if (request.cookies.get('auth-token')?.value !== 'admin') {
+    return NextResponse.json({ error: 'Solo administración puede modificar productos.' }, { status: 403 })
   }
   let input: Record<string, unknown>
   try {
@@ -64,11 +78,13 @@ export async function POST(request: NextRequest) {
   const cost = Number(input.cost)
   const stock = Number(input.stock)
   const minStock = Number(input.minStock)
+  const tax = input.tax === undefined ? 0 : Number(input.tax)
 
   if (
     !name || !sku || !barcode || !category || !supplier
-    || ![price, cost, stock, minStock].every(Number.isSafeInteger)
-    || [price, cost, stock, minStock].some((value) => value < 0)
+    || ![price, cost, stock, minStock, tax].every(Number.isSafeInteger)
+    || [price, cost, stock, minStock, tax].some((value) => value < 0)
+    || tax > 100
   ) {
     return NextResponse.json({ error: 'Revisa los campos obligatorios y los valores numéricos.' }, { status: 400 })
   }
@@ -84,9 +100,9 @@ export async function POST(request: NextRequest) {
   db.exec('BEGIN IMMEDIATE')
   try {
     db.prepare(`
-      INSERT INTO products (id, name, sku, barcode, category_id, supplier_id, price, cost, stock, min_stock, unit)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, sku, barcode, categoryRow.id, supplierRow.id, price, cost, stock, minStock, unit)
+      INSERT INTO products (id, name, sku, barcode, category_id, supplier_id, price, cost, stock, min_stock, unit, tax)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, name, sku, barcode, categoryRow.id, supplierRow.id, price, cost, stock, minStock, unit, tax)
     if (stock > 0) {
       db.prepare(`
         INSERT INTO inventory_movements (id, product_id, quantity_delta, reason)

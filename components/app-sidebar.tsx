@@ -16,6 +16,7 @@ import {
   Sparkles,
   X,
   LogOut,
+  Inbox,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -38,6 +39,7 @@ const nav = [
       { href: '/proveedores', label: 'Proveedores', icon: Truck },
       { href: '/usuarios', label: 'Usuarios', icon: Users },
       { href: '/configuracion', label: 'Configuración', icon: Settings },
+      { href: '/solicitudes', label: 'Solicitudes', icon: Inbox },
     ],
   },
 ]
@@ -52,6 +54,10 @@ export function AppSidebar({
   role?: string
 }) {
   const pathname = usePathname()
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.replace('/login')
+  }
 
   // Filtramos la navegación por rol
   const filteredNav = nav.map((group) => {
@@ -159,11 +165,8 @@ export function AppSidebar({
             </p>
           </div>
           <button
-            onClick={() => {
-              document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-              window.location.href = '/login'
-            }}
-            className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            onClick={logout}
+            className="group flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <LogOut className="size-[18px]" />
             <span className="flex-1 text-left">Cerrar sesión</span>

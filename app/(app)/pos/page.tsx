@@ -88,7 +88,7 @@ export default function PosPage() {
   const remove = (id: string) => setCart((prev) => prev.filter((l) => l.product.id !== id))
 
   const subtotal = cart.reduce((s, l) => s + l.product.price * l.qty, 0)
-  const tax = Math.round(subtotal * 0.08)
+  const tax = cart.reduce((sum, line) => sum + Math.round(line.product.price * line.qty * line.product.tax / 100), 0)
   const total = subtotal + tax
 
   const checkout = async () => {
@@ -264,7 +264,7 @@ export default function PosPage() {
               <span className="tabular-nums">{currency(subtotal)}</span>
             </div>
             <div className="flex justify-between text-muted-foreground">
-              <span>Impuesto (8%)</span>
+              <span>Impuesto por producto</span>
               <span className="tabular-nums">{currency(tax)}</span>
             </div>
             <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
@@ -295,7 +295,7 @@ export default function PosPage() {
             {cart.map((l) => (
               <div key={l.product.id} className="flex justify-between py-0.5">
                 <span className="text-muted-foreground">{l.qty}× {l.product.name}</span>
-                <span className="tabular-nums">{currency(l.product.price * l.qty)}</span>
+                <span className="tabular-nums">{currency(l.product.price * l.qty + Math.round(l.product.price * l.qty * l.product.tax / 100))}</span>
               </div>
             ))}
           </div>

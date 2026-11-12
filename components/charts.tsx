@@ -112,31 +112,28 @@ export function DonutChart({
   const total = data.reduce((s, d) => s + d.value, 0)
   const r = size / 2 - 12
   const c = 2 * Math.PI * r
-  let offset = 0
+  const segments = data.map((item) => ({
+    item,
+    dash: total > 0 ? item.value / total * c : 0,
+  }))
   return (
     <div className="flex items-center gap-6">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
         <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-          {data.map((d, i) => {
-            const frac = d.value / total
-            const dash = frac * c
-            const el = (
+          {segments.map(({ item, dash }, i) => (
               <circle
                 key={i}
                 cx={size / 2}
                 cy={size / 2}
                 r={r}
                 fill="none"
-                stroke={d.color}
+                stroke={item.color}
                 strokeWidth={16}
                 strokeDasharray={`${dash} ${c - dash}`}
-                strokeDashoffset={-offset}
+                strokeDashoffset={-segments.slice(0, i).reduce((sum, segment) => sum + segment.dash, 0)}
                 strokeLinecap="butt"
               />
-            )
-            offset += dash
-            return el
-          })}
+          ))}
         </g>
         <text
           x="50%"

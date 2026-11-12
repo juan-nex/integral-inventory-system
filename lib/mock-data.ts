@@ -12,6 +12,7 @@ export type Product = {
   stock: number
   minStock: number
   unit: string
+  tax: number
 }
 
 export type SaleItem = {
@@ -19,19 +20,43 @@ export type SaleItem = {
   name: string
   qty: number
   price: number
+  tax?: number
 }
+
+export type SaleStatus = 'Completada' | 'Anulación solicitada' | 'Anulada'
 
 export type Sale = {
   id: string
   date: string
   time: string
+  userId?: string
   cashier: string
   customer: string
   items: SaleItem[]
   total: number
   method: 'Efectivo' | 'Tarjeta' | 'Transferencia'
+  status?: SaleStatus
 }
 
+export type Ticket = {
+  id: string
+  userId: string
+  userName: string
+  subject: string
+  type: 'Error de stock' | 'Precio incorrecto' | 'Falla del sistema' | 'Otro'
+  description: string
+  priority: 'Baja' | 'Media' | 'Alta'
+  status: 'Abierto' | 'En proceso' | 'Resuelto'
+  response?: string
+  date: string
+}
+
+export type Notice = {
+  id: string
+  title: string
+  body: string
+  date: string
+}
 export type User = {
   id: string
   name: string
@@ -59,36 +84,42 @@ export const suppliers = [
 ]
 
 export const products: Product[] = [
-  { id: 'P-1001', name: 'Coca-Cola 400ml', sku: 'BEB-COC-400', barcode: '7702004003457', category: 'Bebidas', supplier: 'Bebidas Andinas S.A.', price: 2500, cost: 1700, stock: 128, minStock: 40, unit: 'und' },
-  { id: 'P-1002', name: 'Agua Cristal 600ml', sku: 'BEB-AGU-600', barcode: '7702535000123', category: 'Bebidas', supplier: 'Bebidas Andinas S.A.', price: 1800, cost: 1100, stock: 18, minStock: 30, unit: 'und' },
-  { id: 'P-1003', name: 'Papas Margarita Pollo', sku: 'SNK-MAR-POL', barcode: '7702025101234', category: 'Snacks', supplier: 'Distribuidora El Progreso', price: 2200, cost: 1500, stock: 64, minStock: 25, unit: 'und' },
-  { id: 'P-1004', name: 'Leche Alpina 1L', sku: 'LAC-ALP-1L', barcode: '7702001042198', category: 'Lácteos', supplier: 'Alimentos La Cosecha', price: 4200, cost: 3200, stock: 6, minStock: 20, unit: 'und' },
-  { id: 'P-1005', name: 'Yogurt Alpina Fresa', sku: 'LAC-YOG-FRE', barcode: '7702001098765', category: 'Lácteos', supplier: 'Alimentos La Cosecha', price: 3500, cost: 2500, stock: 42, minStock: 15, unit: 'und' },
-  { id: 'P-1006', name: 'Jabón Rey 300g', sku: 'ASE-REY-300', barcode: '7702011223344', category: 'Aseo', supplier: 'Aseo Total Ltda.', price: 3200, cost: 2100, stock: 0, minStock: 12, unit: 'und' },
-  { id: 'P-1007', name: 'Pan Tajado Bimbo', sku: 'PAN-BIM-TAJ', barcode: '7702099001122', category: 'Panadería', supplier: 'Distribuidora El Progreso', price: 5800, cost: 4200, stock: 22, minStock: 10, unit: 'und' },
-  { id: 'P-1008', name: 'Arroz Diana 500g', sku: 'GRA-DIA-500', barcode: '7702123400998', category: 'Granos', supplier: 'Alimentos La Cosecha', price: 2900, cost: 2000, stock: 88, minStock: 30, unit: 'und' },
-  { id: 'P-1009', name: 'Detergente Fab 1kg', sku: 'ASE-FAB-1K', barcode: '7702011990011', category: 'Aseo', supplier: 'Aseo Total Ltda.', price: 9800, cost: 7100, stock: 14, minStock: 15, unit: 'und' },
-  { id: 'P-1010', name: 'Gaseosa Postobón 1.5L', sku: 'BEB-POS-15', barcode: '7702004556677', category: 'Bebidas', supplier: 'Bebidas Andinas S.A.', price: 4500, cost: 3100, stock: 56, minStock: 20, unit: 'und' },
-  { id: 'P-1011', name: 'Galletas Festival', sku: 'SNK-FES-CHO', barcode: '7702025667788', category: 'Snacks', supplier: 'Distribuidora El Progreso', price: 1500, cost: 950, stock: 9, minStock: 20, unit: 'und' },
-  { id: 'P-1012', name: 'Café Sello Rojo 250g', sku: 'GRA-SEL-250', barcode: '7702123998877', category: 'Granos', supplier: 'Alimentos La Cosecha', price: 7200, cost: 5400, stock: 33, minStock: 15, unit: 'und' },
+  { id: 'P-1001', name: 'Coca-Cola 400ml', sku: 'BEB-COC-400', barcode: '7702004003457', category: 'Bebidas', supplier: 'Bebidas Andinas S.A.', price: 2500, cost: 1700, stock: 128, minStock: 40, unit: 'und', tax: 0 },
+  { id: 'P-1002', name: 'Agua Cristal 600ml', sku: 'BEB-AGU-600', barcode: '7702535000123', category: 'Bebidas', supplier: 'Bebidas Andinas S.A.', price: 1800, cost: 1100, stock: 18, minStock: 30, unit: 'und', tax: 0 },
+  { id: 'P-1003', name: 'Papas Margarita Pollo', sku: 'SNK-MAR-POL', barcode: '7702025101234', category: 'Snacks', supplier: 'Distribuidora El Progreso', price: 2200, cost: 1500, stock: 64, minStock: 25, unit: 'und', tax: 0 },
+  { id: 'P-1004', name: 'Leche Alpina 1L', sku: 'LAC-ALP-1L', barcode: '7702001042198', category: 'Lácteos', supplier: 'Alimentos La Cosecha', price: 4200, cost: 3200, stock: 6, minStock: 20, unit: 'und', tax: 0 },
+  { id: 'P-1005', name: 'Yogurt Alpina Fresa', sku: 'LAC-YOG-FRE', barcode: '7702001098765', category: 'Lácteos', supplier: 'Alimentos La Cosecha', price: 3500, cost: 2500, stock: 42, minStock: 15, unit: 'und', tax: 0 },
+  { id: 'P-1006', name: 'Jabón Rey 300g', sku: 'ASE-REY-300', barcode: '7702011223344', category: 'Aseo', supplier: 'Aseo Total Ltda.', price: 3200, cost: 2100, stock: 0, minStock: 12, unit: 'und', tax: 0 },
+  { id: 'P-1007', name: 'Pan Tajado Bimbo', sku: 'PAN-BIM-TAJ', barcode: '7702099001122', category: 'Panadería', supplier: 'Distribuidora El Progreso', price: 5800, cost: 4200, stock: 22, minStock: 10, unit: 'und', tax: 0 },
+  { id: 'P-1008', name: 'Arroz Diana 500g', sku: 'GRA-DIA-500', barcode: '7702123400998', category: 'Granos', supplier: 'Alimentos La Cosecha', price: 2900, cost: 2000, stock: 88, minStock: 30, unit: 'und', tax: 0 },
+  { id: 'P-1009', name: 'Detergente Fab 1kg', sku: 'ASE-FAB-1K', barcode: '7702011990011', category: 'Aseo', supplier: 'Aseo Total Ltda.', price: 9800, cost: 7100, stock: 14, minStock: 15, unit: 'und', tax: 0 },
+  { id: 'P-1010', name: 'Gaseosa Postobón 1.5L', sku: 'BEB-POS-15', barcode: '7702004556677', category: 'Bebidas', supplier: 'Bebidas Andinas S.A.', price: 4500, cost: 3100, stock: 56, minStock: 20, unit: 'und', tax: 0 },
+  { id: 'P-1011', name: 'Galletas Festival', sku: 'SNK-FES-CHO', barcode: '7702025667788', category: 'Snacks', supplier: 'Distribuidora El Progreso', price: 1500, cost: 950, stock: 9, minStock: 20, unit: 'und', tax: 0 },
+  { id: 'P-1012', name: 'Café Sello Rojo 250g', sku: 'GRA-SEL-250', barcode: '7702123998877', category: 'Granos', supplier: 'Alimentos La Cosecha', price: 7200, cost: 5400, stock: 33, minStock: 15, unit: 'und', tax: 0 },
 ]
 
-export function stockStatus(p: Product): StockStatus {
+export function stockStatus(p: Pick<Product, 'stock' | 'minStock'>): StockStatus {
   if (p.stock <= 0) return 'out'
   if (p.stock <= p.minStock) return 'low'
   return 'ok'
 }
 
 export const sales: Sale[] = [
-  { id: 'V-20481', date: '2026-07-09', time: '09:14', cashier: 'Laura Gómez', customer: 'Cliente general', method: 'Efectivo', total: 12800, items: [{ productId: 'P-1001', name: 'Coca-Cola 400ml', qty: 2, price: 2500 }, { productId: 'P-1007', name: 'Pan Tajado Bimbo', qty: 1, price: 5800 }, { productId: 'P-1002', name: 'Agua Cristal 600ml', qty: 1, price: 1800 }] },
-  { id: 'V-20480', date: '2026-07-09', time: '08:52', cashier: 'Andrés Ruiz', customer: 'María Fernanda', method: 'Tarjeta', total: 21500, items: [{ productId: 'P-1004', name: 'Leche Alpina 1L', qty: 3, price: 4200 }, { productId: 'P-1012', name: 'Café Sello Rojo 250g', qty: 1, price: 7200 }] },
-  { id: 'V-20479', date: '2026-07-09', time: '08:31', cashier: 'Laura Gómez', customer: 'Cliente general', method: 'Efectivo', total: 6900, items: [{ productId: 'P-1003', name: 'Papas Margarita Pollo', qty: 2, price: 2200 }, { productId: 'P-1011', name: 'Galletas Festival', qty: 1, price: 1500 }, { productId: 'P-1002', name: 'Agua Cristal 600ml', qty: 1, price: 1000 }] },
-  { id: 'V-20478', date: '2026-07-08', time: '19:05', cashier: 'Andrés Ruiz', customer: 'José Palacio', method: 'Transferencia', total: 18400, items: [{ productId: 'P-1010', name: 'Gaseosa Postobón 1.5L', qty: 2, price: 4500 }, { productId: 'P-1009', name: 'Detergente Fab 1kg', qty: 1, price: 9800 }] },
+  { id: 'V-20481', date: '2026-07-09', time: '09:14', cashier: 'Laura Gómez', customer: 'Cliente general', method: 'Efectivo', total: 12600, items: [{ productId: 'P-1001', name: 'Coca-Cola 400ml', qty: 2, price: 2500 }, { productId: 'P-1007', name: 'Pan Tajado Bimbo', qty: 1, price: 5800 }, { productId: 'P-1002', name: 'Agua Cristal 600ml', qty: 1, price: 1800 }] },
+  { id: 'V-20480', date: '2026-07-09', time: '08:52', cashier: 'Andrés Ruiz', customer: 'María Fernanda', method: 'Tarjeta', total: 19800, items: [{ productId: 'P-1004', name: 'Leche Alpina 1L', qty: 3, price: 4200 }, { productId: 'P-1012', name: 'Café Sello Rojo 250g', qty: 1, price: 7200 }] },
+  { id: 'V-20479', date: '2026-07-09', time: '08:31', cashier: 'Laura Gómez', customer: 'Cliente general', method: 'Efectivo', total: 7700, items: [{ productId: 'P-1003', name: 'Papas Margarita Pollo', qty: 2, price: 2200 }, { productId: 'P-1011', name: 'Galletas Festival', qty: 1, price: 1500 }, { productId: 'P-1002', name: 'Agua Cristal 600ml', qty: 1, price: 1800 }] },
+  { id: 'V-20478', date: '2026-07-08', time: '19:05', cashier: 'Andrés Ruiz', customer: 'José Palacio', method: 'Transferencia', total: 18800, items: [{ productId: 'P-1010', name: 'Gaseosa Postobón 1.5L', qty: 2, price: 4500 }, { productId: 'P-1009', name: 'Detergente Fab 1kg', qty: 1, price: 9800 }] },
   { id: 'V-20477', date: '2026-07-08', time: '18:22', cashier: 'Laura Gómez', customer: 'Cliente general', method: 'Efectivo', total: 8700, items: [{ productId: 'P-1008', name: 'Arroz Diana 500g', qty: 3, price: 2900 }] },
   { id: 'V-20476', date: '2026-07-08', time: '16:40', cashier: 'Camila Vega', customer: 'Cliente general', method: 'Tarjeta', total: 15300, items: [{ productId: 'P-1005', name: 'Yogurt Alpina Fresa', qty: 3, price: 3500 }, { productId: 'P-1001', name: 'Coca-Cola 400ml', qty: 2, price: 2400 }] },
 ]
 
+export const notices: Notice[] = [
+  { id: 'N-01', title: 'Horario de cierre', body: 'Esta semana el cierre de caja será a las 7:00 p. m.', date: '2026-07-09' },
+  { id: 'N-02', title: 'Verificación de precios', body: 'Confirma el precio en la etiqueta antes de cobrar productos lácteos.', date: '2026-07-08' },
+]
+
 export const users: User[] = [
+  { id: 'U-SELLER-DEMO', name: 'Vendedor Demo', email: 'vendedor@sena.edu.co', role: 'Vendedor', status: 'Activo', lastActive: 'Ahora', sales: 0 },
   { id: 'U-01', name: 'Laura Gómez', email: 'laura.gomez@stockly.co', role: 'Vendedor', status: 'Activo', lastActive: 'Hace 2 min', sales: 184 },
   { id: 'U-02', name: 'Andrés Ruiz', email: 'andres.ruiz@stockly.co', role: 'Vendedor', status: 'Activo', lastActive: 'Hace 15 min', sales: 152 },
   { id: 'U-03', name: 'Camila Vega', email: 'camila.vega@stockly.co', role: 'Inventarista', status: 'Activo', lastActive: 'Hace 1 h', sales: 41 },

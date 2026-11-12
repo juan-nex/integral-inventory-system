@@ -5,7 +5,7 @@ import { Menu, Search, Sun, Moon, Bell, Command } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
 import { CommandPalette } from '@/components/command-palette'
 
-export function Topbar({ onMenu }: { onMenu: () => void }) {
+export function Topbar({ onMenu, name = 'Administrador', role = 'admin' }: { onMenu: () => void, name?: string, role?: string }) {
   const { theme, toggleTheme } = useTheme()
   const [paletteOpen, setPaletteOpen] = useState(false)
 
@@ -66,11 +66,11 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         <div className="mx-1 h-8 w-px bg-border" />
         <button className="flex items-center gap-2.5 rounded-xl py-1 pl-1 pr-2 hover:bg-muted">
           <span className="flex size-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
-            DM
+            {name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}
           </span>
           <span className="hidden text-left leading-tight sm:block">
-            <span className="block text-sm font-medium">Diego Martínez</span>
-            <span className="block text-xs text-muted-foreground">Administrador</span>
+            <span className="block text-sm font-medium">{name}</span>
+            <span className="block text-xs text-muted-foreground">{role === 'admin' ? 'Administrador' : 'Vendedor'}</span>
           </span>
         </button>
       </div>

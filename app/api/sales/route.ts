@@ -6,10 +6,12 @@ export const runtime = 'nodejs'
 type SaleRow = {
   id: string
   sold_at: string
+  cashier_id: string | null
   cashier_name: string
   customer: string
   method: 'Efectivo' | 'Tarjeta' | 'Transferencia'
   total: number
+  status: string
 }
 
 type ItemRow = {
@@ -17,6 +19,7 @@ type ItemRow = {
   name: string
   qty: number
   price: number
+  tax: number
 }
 
 type ProductRow = {
@@ -24,6 +27,7 @@ type ProductRow = {
   name: string
   price: number
   stock: number
+  tax: number
 }
 
 export async function GET(request: NextRequest) {
@@ -32,13 +36,19 @@ export async function GET(request: NextRequest) {
   }
 
   const db = getDatabase()
-  const sales = db.prepare(`
-    SELECT id, sold_at, cashier_name, customer, method, total
-    FROM sales
-    ORDER BY sold_at DESC
-  `).all() as SaleRow[]
+  const role = request.cookies.get('auth-token')?.value
+  const userId = request.cookies.get('auth-user')?.value
+  if (role !== 'admin' && role !== 'vendedor') {
+    return NextResponse.json({ error: 'No tienes permiso para consultar ventas.' }, { status: 403 })
+  }
+  if (role === 'vendedor' && !userId) {
+    return NextResponse.json({ error: 'Vuelve a iniciar sesión.' }, { status: 401 })
+  }
+  const sales = (role === 'admin'
+    ? db.prepare('SELECT id, sold_at, cashier_id, cashier_name, customer, method, total, status FROM sales ORDER BY sold_at DESC').all()
+    : db.prepare('SELECT id, sold_at, cashier_id, cashier_name, customer, method, total, status FROM sales WHERE cashier_id = ? ORDER BY sold_at DESC').all(userId ?? '')) as SaleRow[]
   const readItems = db.prepare(`
-    SELECT product_id, product_name AS name, qty, unit_price AS price
+  SELECT product_id, product_name AS name, qty, unit_price AS price, tax_rate AS tax
     FROM sale_items
     WHERE sale_id = ?
   `)
@@ -48,17 +58,20 @@ export async function GET(request: NextRequest) {
     const items = readItems.all(sale.id) as ItemRow[]
     return {
       id: sale.id,
+      userId: sale.cashier_id,
       date,
       time: time.slice(0, 5),
       cashier: sale.cashier_name,
       customer: sale.customer,
       method: sale.method,
       total: sale.total,
+      status: sale.status as SaleRow['status'],
       items: items.map((item) => ({
         productId: item.product_id,
         name: item.name,
         qty: item.qty,
         price: item.price,
+        tax: item.tax,
       })),
     }
   }))
@@ -67,6 +80,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   if (!request.cookies.get('auth-token')?.value) {
     return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
+  }
+  if (!['admin', 'vendedor'].includes(request.cookies.get('auth-token')?.value || '')) {
+    return NextResponse.json({ error: 'No tienes permiso para registrar ventas.' }, { status: 403 })
   }
 
   let input: { items?: unknown; method?: unknown; customer?: unknown }
@@ -115,7 +131,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Vuelve a iniciar sesión para registrar ventas.' }, { status: 401 })
   }
 
-  const saleId = createId('V')
   const soldAt = new Date().toISOString()
   const customer = typeof input.customer === 'string' && input.customer.trim()
     ? input.customer.trim().slice(0, 150)
@@ -124,7 +139,7 @@ export async function POST(request: NextRequest) {
 
   db.exec('BEGIN IMMEDIATE')
   try {
-    const findProduct = db.prepare('SELECT id, name, price, stock FROM products WHERE id = ?')
+    const findProduct = db.prepare('SELECT id, name, price, stock, tax FROM products WHERE id = ?')
     for (const [productId, qty] of quantities) {
       const product = findProduct.get(productId) as ProductRow | undefined
       if (!product) {
@@ -138,8 +153,15 @@ export async function POST(request: NextRequest) {
       saleItems.push({ product, qty })
     }
 
-    const subtotal = saleItems.reduce((sum, item) => sum + item.product.price * item.qty, 0)
-    const total = subtotal + Math.round(subtotal * 0.08)
+    const saleIdRow = db.prepare(`
+      SELECT COALESCE(MAX(CAST(SUBSTR(id, 3) AS INTEGER)), 20480) + 1 AS next
+      FROM sales WHERE id GLOB 'V-[0-9]*'
+    `).get() as { next: number }
+    const saleId = `V-${saleIdRow.next}`
+    const total = saleItems.reduce(
+      (sum, item) => sum + item.product.price * item.qty + Math.round(item.product.price * item.qty * item.product.tax / 100),
+      0,
+    )
     db.prepare(`
       INSERT INTO sales (id, sold_at, cashier_id, cashier_name, customer, method, total)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -150,8 +172,8 @@ export async function POST(request: NextRequest) {
       WHERE id = ? AND stock >= ?
     `)
     const insertItem = db.prepare(`
-      INSERT INTO sale_items (sale_id, product_id, product_name, qty, unit_price)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO sale_items (sale_id, product_id, product_name, qty, unit_price, tax_rate)
+      VALUES (?, ?, ?, ?, ?, ?)
     `)
     const insertMovement = db.prepare(`
       INSERT INTO inventory_movements (id, product_id, user_id, quantity_delta, reason)
@@ -163,7 +185,7 @@ export async function POST(request: NextRequest) {
       if (Number(update.changes) !== 1) {
         throw new Error(`STOCK_CHANGED:${item.product.name}`)
       }
-      insertItem.run(saleId, item.product.id, item.product.name, item.qty, item.product.price)
+      insertItem.run(saleId, item.product.id, item.product.name, item.qty, item.product.price, item.product.tax)
       insertMovement.run(createId('MOV'), item.product.id, cashier.id, -item.qty, `Venta ${saleId}`)
     }
     db.exec('COMMIT')
@@ -176,11 +198,14 @@ export async function POST(request: NextRequest) {
       customer,
       method,
       total,
+      userId: cashier.id,
+      status: 'Completada',
       items: saleItems.map(({ product, qty }) => ({
         productId: product.id,
         name: product.name,
         qty,
         price: product.price,
+        tax: product.tax,
       })),
     }, { status: 201 })
   } catch (error) {

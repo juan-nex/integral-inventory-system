@@ -71,6 +71,7 @@ export default function ProductosPage() {
       stock: Number(fd.get('stock') || 0),
       minStock: Number(fd.get('minStock') || 0),
       unit: 'und',
+      tax: Number(fd.get('tax') || 0),
     }
     try {
       const response = await fetch('/api/products', {
@@ -296,6 +297,9 @@ export default function ProductosPage() {
               <input name="cost" type="number" min="0" className={inputClass} placeholder="1700" />
             </Field>
           </div>
+          <Field label="Impuesto (%)">
+            <input name="tax" type="number" min="0" max="100" step="1" defaultValue="0" className={inputClass} />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Cantidad inicial">
               <input name="stock" type="number" min="0" className={inputClass} placeholder="100" />

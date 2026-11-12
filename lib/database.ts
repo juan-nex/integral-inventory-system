@@ -46,6 +46,7 @@ function createSchema(db: DatabaseSync) {
       cost INTEGER NOT NULL CHECK (cost >= 0),
       stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
       min_stock INTEGER NOT NULL DEFAULT 0 CHECK (min_stock >= 0),
+      tax INTEGER NOT NULL DEFAULT 0 CHECK (tax >= 0),
       unit TEXT NOT NULL DEFAULT 'und',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -58,7 +59,8 @@ function createSchema(db: DatabaseSync) {
       cashier_name TEXT NOT NULL,
       customer TEXT NOT NULL,
       method TEXT NOT NULL CHECK (method IN ('Efectivo', 'Tarjeta', 'Transferencia')),
-      total INTEGER NOT NULL CHECK (total >= 0)
+      total INTEGER NOT NULL CHECK (total >= 0),
+      status TEXT NOT NULL DEFAULT 'Completada'
     );
 
     CREATE TABLE IF NOT EXISTS sale_items (
@@ -67,7 +69,8 @@ function createSchema(db: DatabaseSync) {
       product_id TEXT NOT NULL REFERENCES products(id),
       product_name TEXT NOT NULL,
       qty INTEGER NOT NULL CHECK (qty > 0),
-      unit_price INTEGER NOT NULL CHECK (unit_price >= 0)
+      unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
+      tax_rate INTEGER NOT NULL DEFAULT 0 CHECK (tax_rate >= 0)
     );
 
     CREATE TABLE IF NOT EXISTS inventory_movements (
@@ -79,10 +82,54 @@ function createSchema(db: DatabaseSync) {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      user_name TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      priority TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Abierto',
+      response TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS sale_void_requests (
+      id TEXT PRIMARY KEY,
+      sale_id TEXT NOT NULL REFERENCES sales(id),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      user_name TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Pendiente',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
     CREATE INDEX IF NOT EXISTS idx_products_supplier ON products(supplier_id);
     CREATE INDEX IF NOT EXISTS idx_sales_sold_at ON sales(sold_at);
     CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements(product_id);
+  `)
+  const productColumns = db.prepare('PRAGMA table_info(products)').all() as { name: string }[]
+  if (!productColumns.some((column) => column.name === 'tax')) {
+    db.exec('ALTER TABLE products ADD COLUMN tax INTEGER NOT NULL DEFAULT 0')
+  }
+  const saleColumns = db.prepare('PRAGMA table_info(sales)').all() as { name: string }[]
+  if (!saleColumns.some((column) => column.name === 'status')) {
+    db.exec("ALTER TABLE sales ADD COLUMN status TEXT NOT NULL DEFAULT 'Completada'")
+  }
+  const saleItemColumns = db.prepare('PRAGMA table_info(sale_items)').all() as { name: string }[]
+  if (!saleItemColumns.some((column) => column.name === 'tax_rate')) {
+    db.exec('ALTER TABLE sale_items ADD COLUMN tax_rate INTEGER NOT NULL DEFAULT 0')
+  }
+  db.exec(`
+    UPDATE sales
+    SET total = (
+      SELECT COALESCE(SUM(qty * unit_price + ROUND(qty * unit_price * tax_rate / 100.0)), 0)
+      FROM sale_items
+      WHERE sale_items.sale_id = sales.id
+    )
+    WHERE EXISTS (SELECT 1 FROM sale_items WHERE sale_items.sale_id = sales.id)
   `)
 }
 
@@ -119,8 +166,8 @@ function seedDemoData(db: DatabaseSync) {
     })
     const insertProduct = db.prepare(`
       INSERT OR IGNORE INTO products (
-        id, name, sku, barcode, category_id, supplier_id, price, cost, stock, min_stock, unit
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, sku, barcode, category_id, supplier_id, price, cost, stock, min_stock, unit, tax
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     const categoryIds = new Map(categories.map((category, index) => [category.name, `CAT-${index + 1}`]))
     const supplierIds = new Map(suppliers.map((supplier) => [supplier.name, supplier.id]))
@@ -142,6 +189,7 @@ function seedDemoData(db: DatabaseSync) {
         product.stock,
         product.minStock,
         product.unit,
+        product.tax,
       )
     })
 
@@ -150,8 +198,8 @@ function seedDemoData(db: DatabaseSync) {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
     const insertSaleItem = db.prepare(`
-      INSERT INTO sale_items (sale_id, product_id, product_name, qty, unit_price)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO sale_items (sale_id, product_id, product_name, qty, unit_price, tax_rate)
+      VALUES (?, ?, ?, ?, ?, ?)
     `)
     sales.forEach((sale) => {
       const cashierId = users.find((user) => user.name === sale.cashier)?.id ?? null
@@ -165,7 +213,8 @@ function seedDemoData(db: DatabaseSync) {
         sale.total,
       )
       sale.items.forEach((item) => {
-        insertSaleItem.run(sale.id, item.productId, item.name, item.qty, item.price)
+        const product = products.find((candidate) => candidate.id === item.productId)
+        insertSaleItem.run(sale.id, item.productId, item.name, item.qty, item.price, product?.tax ?? 0)
       })
     })
 
@@ -195,6 +244,15 @@ function seedDemoAdmin(db: DatabaseSync) {
   `).run('U-ADMIN-DEMO', 'Administrador SENA', 'admin@sena.edu.co', passwordHash, 'admin', 1)
 }
 
+function seedDemoSeller(db: DatabaseSync) {
+  const salt = randomBytes(16).toString('hex')
+  const passwordHash = `${salt}:${scryptSync(demoPassword, salt, 64).toString('hex')}`
+  db.prepare(`
+    INSERT OR IGNORE INTO users (id, name, email, password_hash, role, active)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run('U-SELLER-DEMO', 'Vendedor Demo', 'vendedor@sena.edu.co', passwordHash, 'vendedor', 1)
+}
+
 export function getDatabase() {
   if (connection) return connection
 
@@ -208,6 +266,7 @@ export function getDatabase() {
     createSchema(db)
     seedDemoData(db)
     seedDemoAdmin(db)
+    seedDemoSeller(db)
   } catch (error) {
     db.close()
     throw error
@@ -219,8 +278,8 @@ export function getDatabase() {
 
 export function verifyUser(email: string, password: string) {
   const row = getDatabase()
-    .prepare('SELECT id, role, password_hash FROM users WHERE email = ? AND active = 1')
-    .get(email) as { id: string; role: string; password_hash: string } | undefined
+    .prepare('SELECT id, name, role, password_hash FROM users WHERE email = ? AND active = 1')
+    .get(email) as { id: string; name: string; role: string; password_hash: string } | undefined
 
   if (!row) return null
   const [salt, storedHash] = row.password_hash.split(':')
@@ -232,7 +291,23 @@ export function verifyUser(email: string, password: string) {
     return null
   }
 
-  return { id: row.id, role: row.role }
+  return { id: row.id, name: row.name, role: row.role }
+}
+
+export function changeUserPassword(userId: string, currentPassword: string, newPassword: string) {
+  const db = getDatabase()
+  const row = db.prepare('SELECT password_hash FROM users WHERE id = ? AND active = 1')
+    .get(userId) as { password_hash: string } | undefined
+  if (!row) return false
+  const [salt, storedHash] = row.password_hash.split(':')
+  if (!salt || !storedHash) return false
+  const currentHash = scryptSync(currentPassword, salt, 64)
+  const expectedHash = Buffer.from(storedHash, 'hex')
+  if (currentHash.length !== expectedHash.length || !timingSafeEqual(currentHash, expectedHash)) return false
+  const nextSalt = randomBytes(16).toString('hex')
+  const nextHash = scryptSync(newPassword, nextSalt, 64).toString('hex')
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(`${nextSalt}:${nextHash}`, userId)
+  return true
 }
 
 export function createId(prefix: string) {

@@ -25,20 +25,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Correo o contraseña incorrectos.' }, { status: 401 })
   }
 
-  const response = NextResponse.json({ success: true })
+  const isHttps =
+    request.headers.get('x-forwarded-proto')?.split(',')[0].trim() === 'https'
+    || new URL(request.url).protocol === 'https:'
+  const response = NextResponse.json({ success: true, user: { id: user.id, name: user.name, role: user.role } })
   response.cookies.set('auth-token', user.role, {
     httpOnly: true,
     maxAge: 60 * 60 * 24,
     path: '/',
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: isHttps,
   })
   response.cookies.set('auth-user', user.id, {
     httpOnly: true,
     maxAge: 60 * 60 * 24,
     path: '/',
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: isHttps,
+  })
+  response.cookies.set('auth-name', user.name, {
+    httpOnly: true,
+    maxAge: 60 * 60 * 24,
+    path: '/',
+    sameSite: 'lax',
+    secure: isHttps,
   })
   return response
 }
