@@ -1,16 +1,24 @@
 import { NextResponse } from 'next/server'
-import { getDatabase } from '@/lib/database'
+import { db } from '@/db'
+import * as schema from '@/db/schema'
+import { sql } from 'drizzle-orm'
 
 export const runtime = 'nodejs'
 
 export async function GET() {
-  const db = getDatabase()
-  const products = db.prepare('SELECT COUNT(*) AS count FROM products').get() as { count: number }
-  const sales = db.prepare('SELECT COUNT(*) AS count FROM sales').get() as { count: number }
-  return NextResponse.json({
-    status: 'ok',
-    database: 'SQLite',
-    products: products.count,
-    sales: sales.count,
-  })
+  try {
+    const productsCount = db.select({ count: sql<number>`count(*)` }).from(schema.products).get()?.count || 0
+    const salesCount = db.select({ count: sql<number>`count(*)` }).from(schema.sales).get()?.count || 0
+
+    return NextResponse.json({
+      status: 'ok',
+      database: 'SQLite (Drizzle ORM)',
+      counts: {
+        products: productsCount,
+        sales: salesCount,
+      },
+    })
+  } catch (error) {
+    return NextResponse.json({ status: 'error', error: String(error) }, { status: 500 })
+  }
 }

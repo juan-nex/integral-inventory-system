@@ -12,6 +12,11 @@
 /data/*.sqlite
 /data/*.sqlite-shm
 /data/*.sqlite-wal
+/db/*.sqlite
+/db/*.sqlite-shm
+/db/*.sqlite-wal
+*.sqlite
+*.sqlite-journal
 
 # debug
 npm-debug.log*

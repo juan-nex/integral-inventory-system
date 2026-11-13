@@ -1,36 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createId, getDatabase } from '@/lib/database'
+import { getProducts, createProduct } from '@/lib/data'
+import { db } from '@/db'
+import * as schema from '@/db/schema'
+import { eq } from 'drizzle-orm'
 
 export const runtime = 'nodejs'
-
-type ProductRow = {
-  id: string
-  name: string
-  sku: string
-  barcode: string
-  category: string
-  supplier: string
-  price: number
-  cost: number
-  stock: number
-  minStock: number
-  unit: string
-  tax: number
-}
-
-function readProducts(query = '') {
-  const db = getDatabase()
-  const term = `%${query.trim()}%`
-  return db.prepare(`
-    SELECT p.id, p.name, p.sku, p.barcode, c.name AS category, s.name AS supplier,
-      p.price, p.cost, p.stock, p.min_stock AS minStock, p.unit, p.tax
-    FROM products p
-    JOIN categories c ON c.id = p.category_id
-    JOIN suppliers s ON s.id = p.supplier_id
-    WHERE ? = '' OR p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?
-    ORDER BY p.name COLLATE NOCASE
-  `).all(query.trim(), term, term, term) as ProductRow[]
-}
 
 function unauthorized(request: NextRequest) {
   return !request.cookies.get('auth-token')?.value
@@ -44,13 +18,27 @@ export async function GET(request: NextRequest) {
   if (role !== 'admin' && role !== 'vendedor') {
     return NextResponse.json({ error: 'No tienes permiso para consultar productos.' }, { status: 403 })
   }
+
   const query = new URL(request.url).searchParams.get('q') || ''
-  const rows = readProducts(query)
+  const rows = await getProducts(query)
+
   if (role === 'vendedor') {
-    return NextResponse.json(rows.map(({ id, name, sku, barcode, category, price, stock, minStock, unit, tax }) => ({
-      id, name, sku, barcode, category, price, stock, minStock, unit, tax,
-    })))
+    return NextResponse.json(
+      rows.map(({ id, name, sku, barcode, category, price, stock, minStock, unit, tax }) => ({
+        id,
+        name,
+        sku,
+        barcode,
+        category,
+        price,
+        stock,
+        minStock,
+        unit,
+        tax,
+      }))
+    )
   }
+
   return NextResponse.json(rows)
 }
 
@@ -61,6 +49,7 @@ export async function POST(request: NextRequest) {
   if (request.cookies.get('auth-token')?.value !== 'admin') {
     return NextResponse.json({ error: 'Solo administración puede modificar productos.' }, { status: 403 })
   }
+
   let input: Record<string, unknown>
   try {
     input = await request.json()
@@ -71,8 +60,8 @@ export async function POST(request: NextRequest) {
   const name = typeof input.name === 'string' ? input.name.trim() : ''
   const sku = typeof input.sku === 'string' ? input.sku.trim() : ''
   const barcode = typeof input.barcode === 'string' ? input.barcode.trim() : ''
-  const category = typeof input.category === 'string' ? input.category.trim() : ''
-  const supplier = typeof input.supplier === 'string' ? input.supplier.trim() : ''
+  const categoryName = typeof input.category === 'string' ? input.category.trim() : ''
+  const supplierName = typeof input.supplier === 'string' ? input.supplier.trim() : ''
   const unit = typeof input.unit === 'string' && input.unit.trim() ? input.unit.trim() : 'und'
   const price = Number(input.price)
   const cost = Number(input.cost)
@@ -81,45 +70,50 @@ export async function POST(request: NextRequest) {
   const tax = input.tax === undefined ? 0 : Number(input.tax)
 
   if (
-    !name || !sku || !barcode || !category || !supplier
-    || ![price, cost, stock, minStock, tax].every(Number.isSafeInteger)
-    || [price, cost, stock, minStock, tax].some((value) => value < 0)
-    || tax > 100
+    !name ||
+    !sku ||
+    !barcode ||
+    !categoryName ||
+    !supplierName ||
+    ![price, cost, stock, minStock, tax].every(Number.isSafeInteger) ||
+    [price, cost, stock, minStock, tax].some((value) => value < 0) ||
+    tax > 100
   ) {
     return NextResponse.json({ error: 'Revisa los campos obligatorios y los valores numéricos.' }, { status: 400 })
   }
 
-  const db = getDatabase()
-  const categoryRow = db.prepare('SELECT id FROM categories WHERE name = ?').get(category) as { id: string } | undefined
-  const supplierRow = db.prepare('SELECT id FROM suppliers WHERE name = ?').get(supplier) as { id: string } | undefined
-  if (!categoryRow || !supplierRow) {
+  const category = db.select().from(schema.categories).where(eq(schema.categories.name, categoryName)).get()
+  const supplier = db.select().from(schema.suppliers).where(eq(schema.suppliers.name, supplierName)).get()
+
+  if (!category || !supplier) {
     return NextResponse.json({ error: 'La categoría o el proveedor seleccionados no existen.' }, { status: 400 })
   }
 
-  const id = createId('P')
-  db.exec('BEGIN IMMEDIATE')
   try {
-    db.prepare(`
-      INSERT INTO products (id, name, sku, barcode, category_id, supplier_id, price, cost, stock, min_stock, unit, tax)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, sku, barcode, categoryRow.id, supplierRow.id, price, cost, stock, minStock, unit, tax)
-    if (stock > 0) {
-      db.prepare(`
-        INSERT INTO inventory_movements (id, product_id, quantity_delta, reason)
-        VALUES (?, ?, ?, ?)
-      `).run(createId('MOV'), id, stock, 'Registro de producto')
-    }
-    db.exec('COMMIT')
+    const id = await createProduct({
+      name,
+      sku,
+      barcode,
+      categoryId: category.id,
+      supplierId: supplier.id,
+      price,
+      cost,
+      stock,
+      minStock,
+      tax,
+      unit,
+      userId: request.cookies.get('auth-user')?.value,
+    })
+
+    const all = await getProducts('')
+    const created = all.find((p) => p.id === id)
+    return NextResponse.json(created, { status: 201 })
   } catch (error) {
-    db.exec('ROLLBACK')
     const message = error instanceof Error ? error.message : ''
     if (message.includes('UNIQUE constraint failed')) {
       return NextResponse.json({ error: 'El SKU o código de barras ya está registrado.' }, { status: 409 })
     }
-    console.error('Error guardando producto en SQLite:', error)
+    console.error('Error guardando producto:', error)
     return NextResponse.json({ error: 'No se pudo guardar el producto.' }, { status: 500 })
   }
-
-  const product = readProducts('').find((row) => row.id === id)
-  return NextResponse.json(product, { status: 201 })
 }
