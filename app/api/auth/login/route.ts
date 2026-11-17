@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { verifyUserCredentials } from '@/lib/data'
+import { createSessionToken, SESSION_COOKIE, SESSION_MAX_AGE } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 
@@ -29,31 +30,17 @@ export async function POST(request: Request) {
     request.headers.get('x-forwarded-proto')?.split(',')[0].trim() === 'https' ||
     new URL(request.url).protocol === 'https:'
 
+  const role = user.role === 'admin' ? 'admin' : 'trabajador'
   const response = NextResponse.json({
     success: true,
-    user: { id: user.id, name: user.name, role: user.role },
+    user: { id: user.id, name: user.name, role },
   })
 
-  // Cookie firmada / httpOnly segura
-  response.cookies.set('auth-token', user.role, {
+  response.cookies.set(SESSION_COOKIE, createSessionToken(user.id), {
     httpOnly: true,
-    maxAge: 60 * 60 * 24,
+    maxAge: SESSION_MAX_AGE,
     path: '/',
-    sameSite: 'lax',
-    secure: isHttps,
-  })
-  response.cookies.set('auth-user', user.id, {
-    httpOnly: true,
-    maxAge: 60 * 60 * 24,
-    path: '/',
-    sameSite: 'lax',
-    secure: isHttps,
-  })
-  response.cookies.set('auth-name', user.name, {
-    httpOnly: true,
-    maxAge: 60 * 60 * 24,
-    path: '/',
-    sameSite: 'lax',
+    sameSite: 'strict',
     secure: isHttps,
   })
 

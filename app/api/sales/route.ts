@@ -3,34 +3,24 @@ import { getSales, createSale } from '@/lib/data'
 import { db } from '@/db'
 import * as schema from '@/db/schema'
 import { eq } from 'drizzle-orm'
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
-  const role = request.cookies.get('auth-token')?.value
-  const userId = request.cookies.get('auth-user')?.value
-  if (!role) {
+  const user = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value)
+  if (!user) {
     return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
   }
-  if (role !== 'admin' && role !== 'vendedor') {
-    return NextResponse.json({ error: 'No tienes permiso para consultar ventas.' }, { status: 403 })
-  }
-  if (role === 'vendedor' && !userId) {
-    return NextResponse.json({ error: 'Vuelve a iniciar sesión.' }, { status: 401 })
-  }
 
-  const sales = await getSales(role === 'vendedor' ? { cashierId: userId } : undefined)
+  const sales = await getSales(user.role === 'trabajador' ? { cashierId: user.id } : undefined)
   return NextResponse.json(sales)
 }
 
 export async function POST(request: NextRequest) {
-  const role = request.cookies.get('auth-token')?.value
-  const userId = request.cookies.get('auth-user')?.value
-  if (!role || !userId) {
+  const user = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value)
+  if (!user) {
     return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
-  }
-  if (!['admin', 'vendedor'].includes(role)) {
-    return NextResponse.json({ error: 'No tienes permiso para registrar ventas.' }, { status: 403 })
   }
 
   let input: { items?: unknown; method?: unknown; customer?: unknown }
@@ -46,7 +36,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'La venta requiere productos y un método de pago válido.' }, { status: 400 })
   }
 
-  const cashier = db.select().from(schema.users).where(eq(schema.users.id, userId)).get()
+  const cashier = db.select().from(schema.users).where(eq(schema.users.id, user.id)).get()
   if (!cashier || cashier.active !== 1) {
     return NextResponse.json({ error: 'Usuario no autorizado.' }, { status: 401 })
   }

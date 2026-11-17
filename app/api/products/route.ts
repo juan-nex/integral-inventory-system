@@ -3,26 +3,20 @@ import { getProducts, createProduct } from '@/lib/data'
 import { db } from '@/db'
 import * as schema from '@/db/schema'
 import { eq } from 'drizzle-orm'
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 
-function unauthorized(request: NextRequest) {
-  return !request.cookies.get('auth-token')?.value
-}
-
 export async function GET(request: NextRequest) {
-  if (unauthorized(request)) {
+  const user = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value)
+  if (!user) {
     return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
-  }
-  const role = request.cookies.get('auth-token')?.value
-  if (role !== 'admin' && role !== 'vendedor') {
-    return NextResponse.json({ error: 'No tienes permiso para consultar productos.' }, { status: 403 })
   }
 
   const query = new URL(request.url).searchParams.get('q') || ''
   const rows = await getProducts(query)
 
-  if (role === 'vendedor') {
+  if (user.role === 'trabajador') {
     return NextResponse.json(
       rows.map(({ id, name, sku, barcode, category, price, stock, minStock, unit, tax }) => ({
         id,
@@ -43,10 +37,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (unauthorized(request)) {
+  const user = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value)
+  if (!user) {
     return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
   }
-  if (request.cookies.get('auth-token')?.value !== 'admin') {
+  if (user.role !== 'admin') {
     return NextResponse.json({ error: 'Solo administración puede modificar productos.' }, { status: 403 })
   }
 
@@ -102,7 +97,7 @@ export async function POST(request: NextRequest) {
       minStock,
       tax,
       unit,
-      userId: request.cookies.get('auth-user')?.value,
+      userId: user.id,
     })
 
     const all = await getProducts('')

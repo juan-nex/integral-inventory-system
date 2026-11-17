@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import {
   Check, ChevronDown, CircleHelp, FileText, Minus, Package, Plus, Printer, ReceiptText,
   Search, ShieldCheck, ShoppingBag, Ticket, TrendingUp, UserRound,
@@ -14,7 +15,7 @@ import {
   getWorkerRequests, requestSaleCancellation, saveWorkerProfile, subscribeWorkerProfile,
   type PaymentMethod, type WorkerProduct, type WorkerProfile, type WorkerRequests,
 } from '@/lib/worker-data'
-import { useWorkerSession } from './worker-shell'
+import { useWorkerSession } from '@/components/app-shell'
 
 type WorkerPage = 'home' | 'sell' | 'products' | 'sales' | 'profile' | 'support'
 
@@ -109,10 +110,10 @@ export function WorkerPageScreen({ page }: { page: WorkerPage }) {
     const target = 500000
     const lowProducts = products.filter((product) => stockStatus(product) !== 'ok')
     const actions = [
-      { href: '/trabajador/vender', label: 'Nueva venta', icon: ShoppingBag },
-      { href: '/trabajador/productos', label: 'Consultar producto', icon: Search },
-      { href: '/trabajador/mis-ventas', label: 'Mis ventas', icon: ReceiptText },
-      { href: '/trabajador/soporte', label: 'Reportar problema', icon: CircleHelp },
+      { href: '/pos', label: 'Nueva venta', icon: ShoppingBag },
+      { href: '/inventario', label: 'Consultar producto', icon: Search },
+      { href: '/ventas', label: 'Mis ventas', icon: ReceiptText },
+      { href: '/solicitudes', label: 'Reportar problema', icon: CircleHelp },
     ]
     return (
       <div className="space-y-5">
@@ -133,7 +134,7 @@ export function WorkerPageScreen({ page }: { page: WorkerPage }) {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
-            <div className="flex items-center justify-between p-4 pb-2"><h2 className="font-semibold">Últimas ventas</h2><Link href="/trabajador/mis-ventas" className="text-sm font-medium text-accent hover:underline">Ver todas</Link></div>
+            <div className="flex items-center justify-between p-4 pb-2"><h2 className="font-semibold">Últimas ventas</h2><Link href="/ventas" className="text-sm font-medium text-accent hover:underline">Ver todas</Link></div>
             {sales.length ? <ul className="divide-y divide-border px-4 pb-2">{sales.slice(0, 5).map((sale) => <li key={sale.id} className="flex items-center justify-between gap-3 py-3"><span className="min-w-0"><span className="block text-sm font-medium">{sale.id}</span><span className="text-xs text-muted-foreground">{sale.date} · {sale.time}</span></span><span className="text-sm font-semibold">{currency(sale.total)}</span></li>)}</ul> : <p className="p-4 text-sm text-muted-foreground">Todavía no tienes ventas registradas.</p>}
           </Card>
           <Card>
@@ -161,7 +162,7 @@ export function WorkerPageScreen({ page }: { page: WorkerPage }) {
     return <SalesPage sales={sales} requests={requests} userId={userId} onRefresh={async () => { await Promise.all([refreshSales(), refreshRequests()]) }} error={error} setError={setError} />
   }
 
-  if (page === 'profile') return <ProfilePage name={name} />
+  if (page === 'profile') return <ProfilePage userId={userId} name={name} />
   return <SupportPage requests={requests} onRefresh={refreshRequests} error={error} setError={setError} />
 }
 
@@ -318,9 +319,10 @@ function SalesPage({ sales, requests, userId, onRefresh, error, setError }: { sa
   )
 }
 
-function ProfilePage({ name }: { name: string }) {
-  const getSnapshot = useCallback(() => getWorkerProfile(name), [name])
-  const getServerSnapshot = useCallback(() => defaultWorkerProfile(name), [name])
+function ProfilePage({ userId, name }: { userId: string; name: string }) {
+  const router = useRouter()
+  const getSnapshot = useCallback(() => getWorkerProfile(userId, name), [userId, name])
+  const getServerSnapshot = useCallback(() => defaultWorkerProfile(userId, name), [userId, name])
   const savedProfile = useSyncExternalStore(subscribeWorkerProfile, getSnapshot, getServerSnapshot)
   const [draft, setDraft] = useState<WorkerProfile | null>(null)
   const profile = draft ?? savedProfile
@@ -331,11 +333,24 @@ function ProfilePage({ name }: { name: string }) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const strength = [newPassword.length >= 8, /[A-Z]/.test(newPassword), /[a-z]/.test(newPassword), /\d/.test(newPassword), /[^A-Za-z0-9]/.test(newPassword)].filter(Boolean).length
-  function saveProfile(event: React.FormEvent) {
+  async function saveProfile(event: React.FormEvent) {
     event.preventDefault()
-    saveWorkerProfile(profile)
-    setDraft(null)
-    setSaved('Perfil guardado en este dispositivo.')
+    setSaved('')
+    try {
+      const response = await fetch('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: profile.name }),
+      })
+      const result = await response.json() as { error?: string }
+      if (!response.ok) throw new Error(result.error || 'No se pudo guardar el perfil.')
+      saveWorkerProfile(userId, profile)
+      setDraft(null)
+      setSaved('Perfil guardado.')
+      router.refresh()
+    } catch (cause) {
+      setSaved(cause instanceof Error ? cause.message : 'No se pudo guardar el perfil.')
+    }
   }
   async function changePassword(event: React.FormEvent) {
     event.preventDefault()
@@ -394,7 +409,7 @@ function ProfilePage({ name }: { name: string }) {
       <Card className="space-y-3 p-4 sm:p-6">
         <h2 className="font-semibold">Preferencias de notificación</h2>
         {([['lowStockAlerts', 'Alertas de stock bajo'], ['adminNotices', 'Avisos del administrador'], ['ticketReplies', 'Respuestas a mis tickets']] as const).map(([key, label]) => <label key={key} className="flex min-h-11 items-center justify-between gap-4"><span className="text-sm">{label}</span><input type="checkbox" checked={profile[key]} onChange={(event) => update(key, event.target.checked)} className="size-5 accent-accent" /></label>)}
-        <button onClick={() => { saveWorkerProfile(profile); setSaved('Preferencias guardadas en este dispositivo.') }} className={outlineButton}>Guardar preferencias</button>
+        <button onClick={() => { saveWorkerProfile(userId, profile); setSaved('Preferencias guardadas en este dispositivo.') }} className={outlineButton}>Guardar preferencias</button>
       </Card>
     </div>
   )

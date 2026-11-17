@@ -49,7 +49,7 @@ export async function seed() {
     }).run()
   })
 
-  // 3. Seed Users (Admin demo + Vendedor demo + Mock users)
+  // 3. Seed users with the two supported roles
   console.log('➡️ Insertando usuarios...')
   const defaultAdmin = {
     id: 'U-ADMIN-DEMO',
@@ -62,8 +62,7 @@ export async function seed() {
   db.insert(schema.users).values(defaultAdmin).run()
 
   for (const u of mockUsers) {
-    const role: 'admin' | 'vendedor' | 'inventarista' =
-      u.role === 'Administrador' ? 'admin' : u.role === 'Vendedor' ? 'vendedor' : 'inventarista'
+    const role = u.role === 'Administrador' ? 'admin' : 'trabajador'
 
     db.insert(schema.users).values({
       id: u.id,

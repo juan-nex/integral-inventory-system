@@ -4,8 +4,16 @@ import { useEffect, useState } from 'react'
 import { Badge, Card, Field, inputClass, PageHeader } from '@/components/kit'
 import { currency, type Ticket } from '@/lib/mock-data'
 import { resolveCancellation, getWorkerRequests, updateTicket, type CancellationRequest } from '@/lib/worker-data'
+import { useAppSession } from '@/components/app-shell'
+import { WorkerPageScreen } from '@/components/trabajador/worker-pages'
 
 export default function RequestsPage() {
+  const { role } = useAppSession()
+  if (role === 'trabajador') return <WorkerPageScreen page="support" />
+  return <AdminRequestsPage />
+}
+
+function AdminRequestsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [cancellations, setCancellations] = useState<CancellationRequest[]>([])
   const [responses, setResponses] = useState<Record<string, string>>({})

@@ -424,7 +424,7 @@ export async function getUsers() {
     id: u.id,
     name: u.name,
     email: u.email,
-    role: u.role === 'admin' ? 'Administrador' : u.role === 'vendedor' ? 'Vendedor' : 'Inventarista',
+    role: u.role === 'admin' ? 'Administrador' : 'Trabajador',
     status: u.active === 1 ? 'Activo' : 'Inactivo',
     lastActive: 'Hoy',
     sales: salesMap.get(u.id) || 0,

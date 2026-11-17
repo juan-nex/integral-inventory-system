@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, Boxes, TrendingUp, AlertTriangle, PackageX } from 'lucide-react'
 import { Card, Badge, PageHeader } from '@/components/kit'
 import { products as initialProducts, categories, stockStatus, currency, type Product } from '@/lib/mock-data'
+import { useAppSession } from '@/components/app-shell'
+import { WorkerPageScreen } from '@/components/trabajador/worker-pages'
 
 const filters = [
   { key: 'all', label: 'Todos' },
@@ -13,6 +15,12 @@ const filters = [
 ] as const
 
 export default function InventarioPage() {
+  const { role } = useAppSession()
+  if (role === 'trabajador') return <WorkerPageScreen page="products" />
+  return <AdminInventarioPage />
+}
+
+function AdminInventarioPage() {
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | 'ok' | 'low' | 'out'>('all')

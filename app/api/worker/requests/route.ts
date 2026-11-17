@@ -4,20 +4,17 @@ import { db } from '@/db'
 import * as schema from '@/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
-  const role = request.cookies.get('auth-token')?.value
-  const userId = request.cookies.get('auth-user')?.value
-  if (role !== 'admin' && role !== 'vendedor') {
+  const user = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value)
+  if (!user) {
     return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
   }
-  if (role === 'vendedor' && !userId) {
-    return NextResponse.json({ error: 'Vuelve a iniciar sesión.' }, { status: 401 })
-  }
 
-  const rawTickets = await getWorkerTickets(role === 'vendedor' ? userId : undefined)
+  const rawTickets = await getWorkerTickets(user.role === 'trabajador' ? user.id : undefined)
   const tickets = rawTickets.map((t) => ({
     id: t.id,
     userId: t.userId,
@@ -31,14 +28,18 @@ export async function GET(request: NextRequest) {
     date: t.createdAt,
   }))
 
-  const cancellations = await getSaleVoidRequests(role === 'vendedor' ? userId : undefined)
+  const cancellations = await getSaleVoidRequests(user.role === 'trabajador' ? user.id : undefined)
 
   return NextResponse.json({ tickets, cancellations })
 }
 
 export async function POST(request: NextRequest) {
-  if (request.cookies.get('auth-token')?.value !== 'vendedor') {
-    return NextResponse.json({ error: 'Solo vendedores pueden crear solicitudes.' }, { status: 403 })
+  const user = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value)
+  if (!user) {
+    return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
+  }
+  if (user.role !== 'trabajador') {
+    return NextResponse.json({ error: 'Solo trabajadores pueden crear solicitudes.' }, { status: 403 })
   }
 
   let input: Record<string, unknown>
@@ -48,11 +49,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'El cuerpo de la solicitud no es JSON válido.' }, { status: 400 })
   }
 
-  const userId = request.cookies.get('auth-user')?.value
-  const userName = request.cookies.get('auth-name')?.value
-  if (!userId || !userName) {
-    return NextResponse.json({ error: 'Vuelve a iniciar sesión.' }, { status: 401 })
-  }
+  const userId = user.id
+  const userName = user.name
 
   if (input.kind === 'ticket') {
     const types = ['Error de stock', 'Precio incorrecto', 'Falla del sistema', 'Otro'] as const
@@ -121,7 +119,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (request.cookies.get('auth-token')?.value !== 'admin') {
+  const user = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value)
+  if (!user) {
+    return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 })
+  }
+  if (user.role !== 'admin') {
     return NextResponse.json({ error: 'Solo administración puede resolver solicitudes.' }, { status: 403 })
   }
 
@@ -181,7 +183,7 @@ export async function PATCH(request: NextRequest) {
               type: 'ajuste',
               quantity: it.quantity,
               reason: `Anulación de venta ${requestRow.saleId}`,
-              userId: request.cookies.get('auth-user')?.value || null,
+              userId: user.id,
             })
             .run()
         }

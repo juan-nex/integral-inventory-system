@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, ReceiptText, ChevronDown, CreditCard, Banknote, ArrowRightLeft } from 'lucide-react'
 import { Card, Badge, PageHeader } from '@/components/kit'
 import { currency, type Sale } from '@/lib/mock-data'
+import { useAppSession } from '@/components/app-shell'
+import { WorkerPageScreen } from '@/components/trabajador/worker-pages'
 
 const methodIcon = {
   Efectivo: Banknote,
@@ -12,6 +14,12 @@ const methodIcon = {
 }
 
 export default function VentasPage() {
+  const { role } = useAppSession()
+  if (role === 'trabajador') return <WorkerPageScreen page="sales" />
+  return <AdminVentasPage />
+}
+
+function AdminVentasPage() {
   const [sales, setSales] = useState<Sale[]>([])
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)

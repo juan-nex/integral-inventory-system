@@ -12,6 +12,12 @@ mkdirSync(dirname(dbPath), { recursive: true })
 const sqlite = new Database(dbPath)
 sqlite.pragma('journal_mode = WAL')
 sqlite.pragma('foreign_keys = ON')
+const usersTable = sqlite.prepare(
+  "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'users'",
+).get()
+if (usersTable) {
+  sqlite.exec("UPDATE users SET role = 'trabajador' WHERE role IN ('vendedor', 'inventarista')")
+}
 
 export const db = drizzle(sqlite, { schema })
 export { schema }

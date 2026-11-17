@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { Store, Palette, Bell, ShieldCheck, Sun, Moon } from 'lucide-react'
 import { Card, PageHeader, Field, inputClass } from '@/components/kit'
 import { useTheme } from '@/components/theme-provider'
+import { useAppSession } from '@/components/app-shell'
+import { WorkerPageScreen } from '@/components/trabajador/worker-pages'
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
@@ -21,6 +23,12 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 }
 
 export default function ConfiguracionPage() {
+  const { role } = useAppSession()
+  if (role === 'trabajador') return <WorkerPageScreen page="profile" />
+  return <AdminConfiguracionPage />
+}
+
+function AdminConfiguracionPage() {
   const { theme, setTheme } = useTheme()
   const [notif, setNotif] = useState({ lowStock: true, dailyReport: true, newSale: false })
 

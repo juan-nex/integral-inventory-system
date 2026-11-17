@@ -96,8 +96,8 @@ const profileEvent = 'sdit-worker-profile-change'
 const profileCache = new Map<string, WorkerProfile>()
 const defaultProfiles = new Map<string, WorkerProfile>()
 
-export function defaultWorkerProfile(name: string): WorkerProfile {
-  const cached = defaultProfiles.get(name)
+export function defaultWorkerProfile(userId: string, name: string): WorkerProfile {
+  const cached = defaultProfiles.get(userId)
   if (cached) return cached
   const profile: WorkerProfile = {
     name,
@@ -107,25 +107,25 @@ export function defaultWorkerProfile(name: string): WorkerProfile {
     adminNotices: true,
     ticketReplies: true,
   }
-  defaultProfiles.set(name, profile)
+  defaultProfiles.set(userId, profile)
   return profile
 }
 
-function profileKey(name: string) {
-  return `${profilePrefix}${name}`
+function profileKey(userId: string) {
+  return `${profilePrefix}${userId}`
 }
 
-export function getWorkerProfile(name: string): WorkerProfile {
-  const cached = profileCache.get(name)
+export function getWorkerProfile(userId: string, name: string): WorkerProfile {
+  const cached = profileCache.get(userId)
   if (cached) return cached
   if (typeof window === 'undefined') {
-    return defaultWorkerProfile(name)
+    return defaultWorkerProfile(userId, name)
   }
-  const saved = window.localStorage.getItem(profileKey(name))
+  const saved = window.localStorage.getItem(profileKey(userId))
   const profile = saved
-    ? { ...defaultWorkerProfile(name), ...JSON.parse(saved) as Partial<WorkerProfile> }
-    : defaultWorkerProfile(name)
-  profileCache.set(name, profile)
+    ? { ...defaultWorkerProfile(userId, name), ...JSON.parse(saved) as Partial<WorkerProfile> }
+    : defaultWorkerProfile(userId, name)
+  profileCache.set(userId, profile)
   return profile
 }
 
@@ -144,8 +144,8 @@ export function subscribeWorkerProfile(onChange: () => void) {
   }
 }
 
-export function saveWorkerProfile(profile: WorkerProfile) {
-  profileCache.set(profile.name, profile)
-  window.localStorage.setItem(profileKey(profile.name), JSON.stringify(profile))
+export function saveWorkerProfile(userId: string, profile: WorkerProfile) {
+  profileCache.set(userId, profile)
+  window.localStorage.setItem(profileKey(userId), JSON.stringify(profile))
   window.dispatchEvent(new Event(profileEvent))
 }

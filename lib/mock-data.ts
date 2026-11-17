@@ -61,7 +61,7 @@ export type User = {
   id: string
   name: string
   email: string
-  role: 'Administrador' | 'Vendedor' | 'Inventarista'
+  role: 'Administrador' | 'Trabajador'
   status: 'Activo' | 'Inactivo'
   lastActive: string
   sales: number
@@ -119,12 +119,12 @@ export const notices: Notice[] = [
 ]
 
 export const users: User[] = [
-  { id: 'U-SELLER-DEMO', name: 'Vendedor Demo', email: 'vendedor@sena.edu.co', role: 'Vendedor', status: 'Activo', lastActive: 'Ahora', sales: 0 },
-  { id: 'U-01', name: 'Laura Gómez', email: 'laura.gomez@stockly.co', role: 'Vendedor', status: 'Activo', lastActive: 'Hace 2 min', sales: 184 },
-  { id: 'U-02', name: 'Andrés Ruiz', email: 'andres.ruiz@stockly.co', role: 'Vendedor', status: 'Activo', lastActive: 'Hace 15 min', sales: 152 },
-  { id: 'U-03', name: 'Camila Vega', email: 'camila.vega@stockly.co', role: 'Inventarista', status: 'Activo', lastActive: 'Hace 1 h', sales: 41 },
+  { id: 'U-SELLER-DEMO', name: 'Trabajador Demo', email: 'vendedor@sena.edu.co', role: 'Trabajador', status: 'Activo', lastActive: 'Ahora', sales: 0 },
+  { id: 'U-01', name: 'Laura Gómez', email: 'laura.gomez@stockly.co', role: 'Trabajador', status: 'Activo', lastActive: 'Hace 2 min', sales: 184 },
+  { id: 'U-02', name: 'Andrés Ruiz', email: 'andres.ruiz@stockly.co', role: 'Trabajador', status: 'Activo', lastActive: 'Hace 15 min', sales: 152 },
+  { id: 'U-03', name: 'Camila Vega', email: 'camila.vega@stockly.co', role: 'Trabajador', status: 'Activo', lastActive: 'Hace 1 h', sales: 41 },
   { id: 'U-04', name: 'Diego Martínez', email: 'diego.martinez@stockly.co', role: 'Administrador', status: 'Activo', lastActive: 'Hace 5 h', sales: 96 },
-  { id: 'U-05', name: 'Paula Ortiz', email: 'paula.ortiz@stockly.co', role: 'Vendedor', status: 'Inactivo', lastActive: 'Hace 8 días', sales: 63 },
+  { id: 'U-05', name: 'Paula Ortiz', email: 'paula.ortiz@stockly.co', role: 'Trabajador', status: 'Inactivo', lastActive: 'Hace 8 días', sales: 63 },
 ]
 
 export const salesTrend = [

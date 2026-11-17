@@ -70,12 +70,12 @@ export function Topbar({ onMenu, name = 'Administrador', role = 'admin' }: { onM
           </span>
           <span className="hidden text-left leading-tight sm:block">
             <span className="block text-sm font-medium">{name}</span>
-            <span className="block text-xs text-muted-foreground">{role === 'admin' ? 'Administrador' : 'Vendedor'}</span>
+            <span className="block text-xs text-muted-foreground">{role === 'admin' ? 'Administrador' : 'Trabajador'}</span>
           </span>
         </button>
       </div>
 
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} role={role} />
     </header>
   )
 }

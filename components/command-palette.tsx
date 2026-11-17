@@ -15,7 +15,7 @@ import {
   Search,
 } from 'lucide-react'
 
-const commands = [
+const adminCommands = [
   { label: 'Ir al Dashboard', href: '/', icon: LayoutDashboard },
   { label: 'Abrir Punto de venta', href: '/pos', icon: ScanBarcode },
   { label: 'Ver Ventas', href: '/ventas', icon: ReceiptText },
@@ -27,11 +27,21 @@ const commands = [
   { label: 'Abrir Configuración', href: '/configuracion', icon: Settings },
 ]
 
-export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+const workerCommands = [
+  { label: 'Ir al Dashboard', href: '/', icon: LayoutDashboard },
+  { label: 'Vender', href: '/pos', icon: ScanBarcode },
+  { label: 'Mis ventas', href: '/ventas', icon: ReceiptText },
+  { label: 'Consultar inventario', href: '/inventario', icon: Boxes },
+  { label: 'Solicitudes y soporte', href: '/solicitudes', icon: BellRing },
+  { label: 'Mi perfil', href: '/configuracion', icon: Settings },
+]
+
+export function CommandPalette({ open, onClose, role }: { open: boolean; onClose: () => void; role: string }) {
   const router = useRouter()
   const [q, setQ] = useState('')
 
   if (!open) return null
+  const commands = role === 'admin' ? adminCommands : workerCommands
   const filtered = commands.filter((c) => c.label.toLowerCase().includes(q.toLowerCase()))
 
   const go = (href: string) => {

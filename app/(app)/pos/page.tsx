@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { Card, Badge, Modal } from '@/components/kit'
 import { categories, stockStatus, currency, type Product } from '@/lib/mock-data'
+import { useAppSession } from '@/components/app-shell'
+import { WorkerPageScreen } from '@/components/trabajador/worker-pages'
 
 type CartLine = { product: Product; qty: number }
 
@@ -26,6 +28,12 @@ const methods = [
 ] as const
 
 export default function PosPage() {
+  const { role } = useAppSession()
+  if (role === 'trabajador') return <WorkerPageScreen page="sell" />
+  return <AdminPosPage />
+}
+
+function AdminPosPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [query, setQuery] = useState('')
   const [cat, setCat] = useState('Todas')

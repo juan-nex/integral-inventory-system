@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search, Package, Barcode, Truck, LayoutGrid, List } from 'lucide-react'
+import { Plus, Search, Package, Barcode, LayoutGrid, List } from 'lucide-react'
 import { Card, Badge, PageHeader, Modal, Field, inputClass } from '@/components/kit'
 import {
   products as seedProducts,

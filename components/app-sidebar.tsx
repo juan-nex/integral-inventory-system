@@ -17,10 +17,14 @@ import {
   X,
   LogOut,
   Inbox,
+  House,
+  UserRound,
+  ClipboardList,
+  CircleHelp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const nav = [
+const adminNav = [
   { section: 'General', items: [{ href: '/', label: 'Dashboard', icon: LayoutDashboard }] },
   {
     section: 'Operación',
@@ -44,6 +48,20 @@ const nav = [
   },
 ]
 
+const workerNav = [
+  {
+    section: 'Mi espacio',
+    items: [
+      { href: '/', label: 'Inicio', icon: House },
+      { href: '/pos', label: 'Vender', icon: ScanBarcode },
+      { href: '/inventario', label: 'Inventario', icon: Boxes },
+      { href: '/ventas', label: 'Mis ventas', icon: ClipboardList },
+      { href: '/solicitudes', label: 'Solicitudes y soporte', icon: CircleHelp },
+      { href: '/configuracion', label: 'Mi perfil', icon: UserRound },
+    ],
+  },
+]
+
 export function AppSidebar({
   open,
   onClose,
@@ -51,7 +69,7 @@ export function AppSidebar({
 }: {
   open?: boolean
   onClose?: () => void
-  role?: string
+  role: 'admin' | 'trabajador'
 }) {
   const pathname = usePathname()
   const logout = async () => {
@@ -59,20 +77,7 @@ export function AppSidebar({
     window.location.replace('/login')
   }
 
-  // Filtramos la navegación por rol
-  const filteredNav = nav.map((group) => {
-    let items = group.items
-    if (role === 'vendedor') {
-      // Vendedor: POS, Ventas (solo suyas, en UI), Inventario, Alertas, Productos
-      const allowed = ['/', '/pos', '/ventas', '/inventario', '/alertas', '/productos']
-      items = items.filter(item => allowed.includes(item.href))
-    } else if (role === 'inventarista') {
-      // Inventarista: Inventario, Alertas, Productos, Proveedores, Dashboard
-      const allowed = ['/', '/inventario', '/alertas', '/productos', '/proveedores']
-      items = items.filter(item => allowed.includes(item.href))
-    }
-    return { ...group, items }
-  }).filter(group => group.items.length > 0)
+  const filteredNav = role === 'trabajador' ? workerNav : adminNav
 
   return (
     <>
@@ -96,7 +101,7 @@ export function AppSidebar({
             </span>
             <div className="leading-tight">
               <p className="text-sm font-semibold">SIDT</p>
-              <p className="text-xs text-muted-foreground capitalize">Rol: {role}</p>
+              <p className="text-xs text-muted-foreground">Rol: {role === 'admin' ? 'Administrador' : 'Trabajador'}</p>
             </div>
           </Link>
           <button
@@ -119,6 +124,7 @@ export function AppSidebar({
                   const active =
                     item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
                   const Icon = item.icon
+                  const badge = 'badge' in item && typeof item.badge === 'number' ? item.badge : 0
                   return (
                     <li key={item.href}>
                       <Link
@@ -133,7 +139,7 @@ export function AppSidebar({
                       >
                         <Icon className="size-[18px]" />
                         <span className="flex-1">{item.label}</span>
-                        {'badge' in item && item.badge ? (
+                        {badge ? (
                           <span
                             className={cn(
                               'flex size-5 items-center justify-center rounded-full text-[11px] font-semibold',
@@ -142,7 +148,7 @@ export function AppSidebar({
                                 : 'bg-destructive/12 text-destructive',
                             )}
                           >
-                            {item.badge}
+                            {badge}
                           </span>
                         ) : null}
                       </Link>

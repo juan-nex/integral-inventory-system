@@ -1,57 +1,114 @@
 'use client'
 
-import { useState } from 'react'
-import { UserPlus, Shield, Search, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { UserPlus, Shield, Search, Pencil, Trash2, Check } from 'lucide-react'
 import { Card, Badge, PageHeader, Modal, Field, inputClass } from '@/components/kit'
-import { users as seedUsers, type User } from '@/lib/mock-data'
 
-const roleTone = {
-  Administrador: 'accent' as const,
-  Vendedor: 'success' as const,
-  Inventarista: 'warning' as const,
+type UserRole = 'admin' | 'trabajador'
+type UserRow = {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+  active: number
+  sales: number
 }
 
-const roles = [
-  { name: 'Administrador', desc: 'Control total: usuarios, reportes, configuración e inventario.', perms: 12 },
-  { name: 'Vendedor', desc: 'Registro de ventas, consulta de productos y punto de venta.', perms: 5 },
-  { name: 'Inventarista', desc: 'Gestión de inventario, productos y alertas de stock.', perms: 7 },
-]
+async function loadUsers() {
+  const response = await fetch('/api/users')
+  const result = await response.json() as UserRow[] | { error?: string }
+  if (!response.ok || !Array.isArray(result)) {
+    throw new Error(!Array.isArray(result) ? result.error || 'No se pudieron cargar los usuarios.' : 'No se pudieron cargar los usuarios.')
+  }
+  return result
+}
 
 export default function UsuariosPage() {
-  const [users, setUsers] = useState<User[]>(seedUsers)
+  const [users, setUsers] = useState<UserRow[]>([])
   const [query, setQuery] = useState('')
+  const [editing, setEditing] = useState<UserRow | null>(null)
   const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
-  const filtered = users.filter(
-    (u) =>
-      u.name.toLowerCase().includes(query.toLowerCase()) ||
-      u.email.toLowerCase().includes(query.toLowerCase()),
+  async function refresh() {
+    setUsers(await loadUsers())
+  }
+
+  useEffect(() => {
+    let active = true
+    void loadUsers().then((rows) => {
+      if (active) setUsers(rows)
+    }).catch((cause: unknown) => {
+      if (active) setError(cause instanceof Error ? cause.message : 'No se pudieron cargar los usuarios.')
+    }).finally(() => {
+      if (active) setLoading(false)
+    })
+    return () => { active = false }
+  }, [])
+
+  const filtered = users.filter((user) =>
+    `${user.name} ${user.email}`.toLowerCase().includes(query.toLowerCase()),
   )
 
-  const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const nu: User = {
-      id: `U-0${users.length + 1}`,
-      name: String(fd.get('name') || 'Nuevo usuario'),
-      email: String(fd.get('email') || 'usuario@stockly.co'),
-      role: (String(fd.get('role')) as User['role']) || 'Vendedor',
-      status: 'Activo',
-      lastActive: 'Recién creado',
-      sales: 0,
+  async function saveUser(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const form = new FormData(event.currentTarget)
+    const body: Record<string, string> = {
+      name: String(form.get('name') || ''),
+      email: String(form.get('email') || ''),
+      role: String(form.get('role') || 'trabajador'),
     }
-    setUsers((prev) => [nu, ...prev])
-    setOpen(false)
+    const password = String(form.get('password') || '')
+    if (password) body.password = password
+
+    try {
+      const response = await fetch(editing ? `/api/users/${editing.id}` : '/api/users', {
+        method: editing ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const result = await response.json() as { error?: string }
+      if (!response.ok) throw new Error(result.error || 'No se pudo guardar el usuario.')
+      await refresh()
+      setOpen(false)
+      setEditing(null)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo guardar el usuario.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleActive(user: UserRow) {
+    setError('')
+    const deleting = user.active === 1
+    if (deleting && !window.confirm(`¿Suspender la cuenta de ${user.name}?`)) return
+    try {
+      const response = await fetch(`/api/users/${user.id}`, {
+        method: deleting ? 'DELETE' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        ...(deleting ? {} : { body: JSON.stringify({ active: true }) }),
+      })
+      const result = await response.json() as { error?: string }
+      if (!response.ok) throw new Error(result.error || 'No se pudo actualizar el usuario.')
+      await refresh()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo actualizar el usuario.')
+    }
   }
 
   return (
     <div className="space-y-6 animate-fade-up">
       <PageHeader
         title="Usuarios y roles"
-        subtitle="Administra el acceso al sistema · RQF002 / CU_02"
+        subtitle="Administra las cuentas y los permisos del sistema."
         actions={
           <button
-            onClick={() => setOpen(true)}
+            onClick={() => { setEditing(null); setError(''); setOpen(true) }}
             className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-accent-foreground hover:bg-accent/90"
           >
             <UserPlus className="size-4" />
@@ -60,32 +117,27 @@ export default function UsuariosPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {roles.map((r) => (
-          <Card key={r.name} className="p-5">
+      <div className="grid gap-4 md:grid-cols-2">
+        {[
+          { role: 'Administrador', description: 'Acceso total a inventario, ventas, usuarios y configuración.', tone: 'accent' as const },
+          { role: 'Trabajador', description: 'Opera ventas e inventario compartido; solo consulta y modifica sus propios registros.', tone: 'success' as const },
+        ].map((item) => (
+          <Card key={item.role} className="p-5">
             <div className="flex items-center gap-2">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-secondary">
-                <Shield className="size-[18px]" />
-              </span>
-              <div>
-                <p className="font-medium">{r.name}</p>
-                <p className="text-xs text-muted-foreground">{r.perms} permisos</p>
-              </div>
+              <span className="flex size-9 items-center justify-center rounded-xl bg-secondary"><Shield className="size-[18px]" /></span>
+              <div><p className="font-medium">{item.role}</p><Badge tone={item.tone}>Rol del sistema</Badge></div>
             </div>
-            <p className="mt-3 text-sm text-muted-foreground">{r.desc}</p>
+            <p className="mt-3 text-sm text-muted-foreground">{item.description}</p>
           </Card>
         ))}
       </div>
 
+      {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+
       <Card className="flex items-center gap-2 p-3">
         <div className="flex flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3">
           <Search className="size-4 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar usuario por nombre o correo..."
-            className="h-10 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar usuario por nombre o correo..." className="h-10 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
         </div>
       </Card>
 
@@ -98,45 +150,33 @@ export default function UsuariosPage() {
                 <th className="px-4 py-3 font-medium">Rol</th>
                 <th className="px-4 py-3 font-medium">Estado</th>
                 <th className="px-4 py-3 text-right font-medium">Ventas</th>
-                <th className="px-4 py-3 font-medium">Última actividad</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u) => (
-                <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex size-9 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
-                        {u.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                      </span>
-                      <div>
-                        <p className="font-medium">{u.name}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
+              {loading ? <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Cargando usuarios…</td></tr>
+                : filtered.map((user) => (
+                  <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/50">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex size-9 items-center justify-center rounded-full bg-secondary text-xs font-semibold">{user.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span>
+                        <div><p className="font-medium">{user.name}</p><p className="text-xs text-muted-foreground">{user.email}</p></div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3"><Badge tone={roleTone[u.role]}>{u.role}</Badge></td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1.5 text-sm">
-                      <span className={`size-2 rounded-full ${u.status === 'Activo' ? 'bg-success' : 'bg-muted-foreground'}`} />
-                      {u.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{u.sales}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{u.lastActive}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted" aria-label="Editar">
-                        <Pencil className="size-4" />
-                      </button>
-                      <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label="Eliminar">
-                        <Trash2 className="size-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3"><Badge tone={user.role === 'admin' ? 'accent' : 'success'}>{user.role === 'admin' ? 'Administrador' : 'Trabajador'}</Badge></td>
+                    <td className="px-4 py-3"><span className="inline-flex items-center gap-1.5"><span className={`size-2 rounded-full ${user.active ? 'bg-success' : 'bg-muted-foreground'}`} />{user.active ? 'Activo' : 'Suspendido'}</span></td>
+                    <td className="px-4 py-3 text-right tabular-nums">{user.sales}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => { setEditing(user); setError(''); setOpen(true) }} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" aria-label={`Editar ${user.name}`}><Pencil className="size-4" /></button>
+                        <button onClick={() => void toggleActive(user)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label={user.active ? `Suspender ${user.name}` : `Reactivar ${user.name}`}>
+                          {user.active ? <Trash2 className="size-4" /> : <Check className="size-4" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              {!loading && filtered.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">No hay usuarios que coincidan.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -144,39 +184,28 @@ export default function UsuariosPage() {
 
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
-        title="Nuevo usuario"
-        description="Crea un usuario y asigna su rol de acceso."
+        onClose={() => { setOpen(false); setEditing(null) }}
+        title={editing ? 'Editar usuario' : 'Nuevo usuario'}
+        description="Gestiona los datos y el rol de acceso."
         footer={
           <>
-            <button onClick={() => setOpen(false)} className="rounded-xl border border-border px-4 py-2 text-sm font-medium hover:bg-muted">
-              Cancelar
-            </button>
-            <button type="submit" form="user-form" className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent/90">
-              Crear usuario
-            </button>
+            <button onClick={() => { setOpen(false); setEditing(null) }} className="rounded-xl border border-border px-4 py-2 text-sm font-medium hover:bg-muted">Cancelar</button>
+            <button type="submit" form="user-form" disabled={busy} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent/90 disabled:opacity-60">{busy ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear usuario'}</button>
           </>
         }
       >
-        <form id="user-form" onSubmit={handleCreate} className="space-y-4">
-          <Field label="Nombre completo">
-            <input name="name" required className={inputClass} placeholder="Ej: Laura Gómez" />
+        <form id="user-form" onSubmit={saveUser} className="space-y-4">
+          <Field label="Nombre completo"><input name="name" required minLength={2} maxLength={100} defaultValue={editing?.name} className={inputClass} /></Field>
+          <Field label="Correo electrónico"><input name="email" type="email" required defaultValue={editing?.email} className={inputClass} /></Field>
+          <Field label={editing ? 'Nueva contraseña (opcional)' : 'Contraseña'}>
+            <input name="password" type="password" minLength={8} required={!editing} autoComplete="new-password" className={inputClass} placeholder={editing ? 'Dejar en blanco para conservarla' : 'Mínimo 8 caracteres'} />
           </Field>
-          <Field label="Correo electrónico">
-            <input name="email" type="email" required className={inputClass} placeholder="laura@stockly.co" />
+          <Field label="Rol">
+            <select name="role" defaultValue={editing?.role || 'trabajador'} className={inputClass}>
+              <option value="trabajador">Trabajador</option>
+              <option value="admin">Administrador</option>
+            </select>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Contraseña">
-              <input name="password" type="password" className={inputClass} placeholder="••••••••" />
-            </Field>
-            <Field label="Rol">
-              <select name="role" className={inputClass}>
-                <option>Vendedor</option>
-                <option>Inventarista</option>
-                <option>Administrador</option>
-              </select>
-            </Field>
-          </div>
         </form>
       </Modal>
     </div>
