@@ -160,16 +160,7 @@ export function AppSidebar({
           ))}
         </nav>
 
-        <div className="m-3 space-y-3">
-          <div className="rounded-2xl border border-sidebar-border bg-gradient-to-br from-accent/10 to-transparent p-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Sparkles className="size-4 text-accent" />
-              Asistente IA
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Sugerencias de reorden y análisis inteligente de tu inventario.
-            </p>
-          </div>
+        <div className="m-3">
           <button
             onClick={logout}
             className="group flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
