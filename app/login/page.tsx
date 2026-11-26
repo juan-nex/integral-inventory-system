@@ -36,7 +36,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
+    <main className="flex h-full min-h-svh items-center justify-center overflow-y-auto bg-muted/40 p-4">
       <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl border border-border bg-card shadow-2xl md:grid-cols-2">
         {/* Brand panel */}
         <div className="relative hidden flex-col justify-between bg-primary p-10 text-primary-foreground md:flex">

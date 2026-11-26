@@ -137,7 +137,7 @@ function AdminPosPage() {
   }
 
   return (
-    <div className="grid h-[calc(100vh-8rem)] gap-6 lg:grid-cols-[1fr_380px] animate-fade-up">
+    <div className="grid min-h-full gap-6 lg:h-[calc(100dvh-8rem)] lg:grid-cols-[1fr_380px] animate-fade-up">
       {/* Products */}
       <div className="flex min-h-0 flex-col gap-4">
       {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}

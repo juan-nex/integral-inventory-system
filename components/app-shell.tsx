@@ -44,12 +44,14 @@ export function AppShell({
 
   return (
     <AppSessionContext.Provider value={{ userId, name, role }}>
-      <div className="flex min-h-screen bg-background">
+      <div className="flex h-screen h-[100dvh] overflow-hidden bg-background">
         <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} role={role} />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <Topbar onMenu={() => setSidebarOpen(true)} name={name} role={role} />
-          <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
-            {restricted ? null : children}
+          <main className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+              {restricted ? null : children}
+            </div>
           </main>
         </div>
       </div>

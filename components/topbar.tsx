@@ -21,7 +21,7 @@ export function Topbar({ onMenu, name = 'Administrador', role = 'admin' }: { onM
   }, [])
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
+    <header className="z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
       <button
         onClick={onMenu}
         className="rounded-lg p-2 text-muted-foreground hover:bg-muted lg:hidden"
